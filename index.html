@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wolf Den Survivors</title>
+  <link rel="stylesheet" href="/style.css?v=iso-nametags-realism-6">
+</head>
+<body>
+  <main id="shell">
+    <section id="lobby" class="panel">
+      <div>
+        <p class="eyebrow">Login, create, or join</p>
+        <h1>Wolf Den Survivors</h1>
+        <p class="intro">Play as a brave sheep with a Glock and an axe, create a world, share the invite address, chop trees, repair defenses, loot crates, buy stronger guns, and destroy the den. PvP and lifesteal are optional.</p>
+      </div>
+      <div class="lobby-grid">
+        <label>Sheep name <input id="name" maxlength="18" value="Wool Scout"></label>
+        <label>World name <input id="world" maxlength="32" value="Moonridge Outpost"></label>
+        <label>Join code <input id="code" maxlength="5" placeholder="ABCDE"></label>
+        <div class="toggles">
+          <label><input id="pvp" type="checkbox"> PvP server</label>
+          <label><input id="lifesteal" type="checkbox"> Lifesteal hearts</label>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="create">Create World</button>
+        <button id="join">Join Code</button>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <canvas id="canvas" width="1280" height="720"></canvas>
+      <div id="hud">
+        <div class="stat"><span>Code</span><strong id="hudCode">-----</strong></div>
+      </div>
+      <div id="tradeMenu" hidden>
+        <div class="menu-head">
+          <strong>Trader</strong>
+          <button id="closeTrade" type="button">Close</button>
+        </div>
+        <select id="gunSelect" aria-label="Trader guns"></select>
+        <button id="buyGun">Buy Gun</button>
+        <button data-buy-item="food">Food</button>
+        <button data-buy-item="seeds">Seeds</button>
+        <button data-buy-item="wood">Wood</button>
+        <button data-buy-item="stone">Stone</button>
+        <button id="sell">Sell</button>
+        <button id="heal">Heal</button>
+      </div>
+      <button id="inviteLink" type="button">Copy Invite Link</button>
+      <div id="buildPanel"></div>
+      <div id="bottomHud">
+        <div id="quickStats">
+          <span>♥ <strong id="hudHp">10/10</strong></span>
+          <span>$ <strong id="hudMoney">0</strong></span>
+          <span>Food <strong id="hudFood">100</strong></span>
+          <span>Wood <strong id="hudWood">0</strong></span>
+          <span>Stone <strong id="hudStone">0</strong></span>
+          <span>Iron <strong id="hudIron">0</strong></span>
+          <span>Seeds <strong id="hudSeeds">2</strong></span>
+          <span>Loot <strong id="hudLoot">0</strong></span>
+          <span>Gun <strong id="hudGun">Glock</strong></span>
+        </div>
+        <div id="hotbar"></div>
+      </div>
+      <div id="craftMenu" hidden>
+        <div class="menu-head">
+          <strong>Crafting</strong>
+          <button id="closeCraft" type="button">Close</button>
+        </div>
+        <div id="craftList"></div>
+      </div>
+      <div id="feed"></div>
+      <div id="tip">WASD move · click use/build · click trader to trade · B build · E craft · scroll hotbar</div>
+    </section>
+  </main>
+  <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+  <script src="/game.js?v=iso-nametags-realism-6"></script>
+</body>
+</html>

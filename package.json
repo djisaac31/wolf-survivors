@@ -1,0 +1,14 @@
+{
+  "name": "wolf-den-survivors",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A room-code multiplayer survival shooter where players loot, trade, fight wolves, and defeat the wolf den.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {}
+}
