@@ -8,12 +8,13 @@ A 3D isometric browser multiplayer survival shooter with a grounded survival-gam
 - Mouse: aim
 - Left click: shoot, use tool, or place selected build
 - Build slots show a green/red placement preview on the map before placing
+- `B`: switches straight to wall building; press again to return to Glock
 - Hold right click with a gun: aim for more damage and less spread, but move slower
 - `R`: reload the current gun
 - Craft Pickaxe: unlocks the pickaxe hotbar slot for mining stone and iron faster
 - Click trader: open trade menu
 - Mouse wheel: scroll the hotbar
-- `B`: toggle build mode
+- Traps are hidden from other players and spikes/traps damage wolves and players
 - `1`: wall while in build mode
 - `2`: wooden spikes while in build mode
 - `3`: gate while in build mode

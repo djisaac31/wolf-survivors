@@ -68,6 +68,7 @@ let healRequest = false;
 let craftMenuOpen = false;
 let tradeMenuOpen = false;
 let mouse = { x: 0, y: 0 };
+let hotbarStateKey = '';
 
 let scene;
 let camera;
@@ -417,6 +418,22 @@ function makeLoot() {
   return mesh;
 }
 
+function makeBullet() {
+  const g = new THREE.Group();
+  const tracer = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.1, 0.72),
+    new THREE.MeshBasicMaterial({ color: 0xfff0a8 })
+  );
+  tracer.position.y = 0.52;
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xffd36b })
+  );
+  glow.position.set(0, 0.52, -0.34);
+  g.add(tracer, glow);
+  return g;
+}
+
 function makeCrop(ready) {
   const g = new THREE.Group();
   const stemMat = material(ready ? 0x77c98d : 0x4f8c54);
@@ -549,6 +566,10 @@ function syncWorld() {
   (state.rocks || []).forEach(e => add(e.id, () => makeRock(e.iron), e));
   (state.crates || []).filter(e => !e.opened).forEach(e => add(e.id, makeCrate, e));
   (state.loot || []).forEach(e => add(e.id, makeLoot, e));
+  (state.bullets || []).forEach(e => {
+    const mesh = add(e.id, makeBullet, e);
+    mesh.rotation.y = -Math.atan2(e.vy, e.vx) - Math.PI / 2;
+  });
   (state.crops || []).forEach(e => add(e.id, () => makeCrop(Date.now() - e.plantedAt >= e.growthMs), e));
   (state.wolves || []).forEach(e => {
     const mesh = add(e.id, () => makeWolf(e.den), e);
@@ -681,6 +702,9 @@ function selected() {
 function renderHotbar() {
   if (!ui.hotbar) return;
   const me = self();
+  const nextKey = `${selectedSlot}:${me?.hasHammer}:${me?.hasPickaxe}`;
+  if (nextKey === hotbarStateKey && ui.hotbar.children.length) return;
+  hotbarStateKey = nextKey;
   ui.hotbar.innerHTML = slots.map((slot, index) => {
     const active = index === selectedSlot ? ' active' : '';
     const locked = (slot.kind === 'hammer' && !me?.hasHammer) || (slot.kind === 'pickaxe' && !me?.hasPickaxe) ? ' locked' : '';
@@ -755,7 +779,14 @@ window.addEventListener('keydown', event => {
   if (key === 'c') craftRequest = 'hammer';
   if (key === 'p') craftRequest = 'pickaxe';
   if (key === 'u') upgradeTarget = upgradeTarget === 'stone' ? 'iron' : 'stone';
-  if (key === 'b') buildMode = !buildMode;
+  if (key === 'b') {
+    if (buildMode) {
+      buildMode = false;
+      selectSlot(0);
+    } else {
+      selectSlot(5);
+    }
+  }
   if (/^[1-9]$/.test(key)) {
     const n = Number(key);
     const buildKeys = ['wall', 'spikes', 'gate', 'tower', 'platform', 'trap', 'campfire', 'bench'];
@@ -789,7 +820,7 @@ canvas.addEventListener('mousedown', event => {
   }
   if (event.button !== 0) return;
   const point = worldFromMouse();
-  if (!buildMode && point && Math.hypot(point.x - state.room.survivor.x, point.y - state.room.survivor.y) < 95 && Math.hypot(me.x - state.room.survivor.x, me.y - state.room.survivor.y) < 125) {
+  if (!buildMode && point && selected().kind !== 'gun' && Math.hypot(point.x - state.room.survivor.x, point.y - state.room.survivor.y) < 55 && Math.hypot(me.x - state.room.survivor.x, me.y - state.room.survivor.y) < 125) {
     tradeMenuOpen = true;
     return;
   }
@@ -865,6 +896,7 @@ function updateHud() {
   ui.hudSeeds.textContent = `${Math.floor(me.seeds || 0)}`;
   ui.hudLoot.textContent = `${me.inventory.length}`;
   ui.feed.textContent = state.room.events.slice(-1)[0] || '';
+  renderHotbar();
   renderGunShop();
   ui.tradeMenu.hidden = !tradeMenuOpen;
   const mode = buildMode ? `Build: ${buildType}` : selected().label;

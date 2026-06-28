@@ -9,8 +9,8 @@ const TICK_RATE = 12;
 const ROOM_TTL_MS = 1000 * 60 * 60 * 3;
 
 const GUNS = {
-  glock: { name: 'Glock', price: 0, damage: 18, range: 360, cooldown: 430, speed: 760, spread: 0.07, mag: 15, reloadMs: 1350 },
-  pistol: { name: 'Pistol', price: 0, damage: 18, range: 360, cooldown: 430, speed: 760, spread: 0.07, mag: 15, reloadMs: 1350 },
+  glock: { name: 'Glock', price: 0, damage: 24, range: 520, cooldown: 430, speed: 820, spread: 0.07, mag: 15, reloadMs: 1350 },
+  pistol: { name: 'Pistol', price: 0, damage: 24, range: 520, cooldown: 430, speed: 820, spread: 0.07, mag: 15, reloadMs: 1350 },
   revolver: { name: 'Revolver', price: 140, damage: 34, range: 380, cooldown: 650, speed: 790, spread: 0.055, mag: 6, reloadMs: 1850 },
   deagle: { name: 'Desert Eagle', price: 240, damage: 46, range: 430, cooldown: 760, speed: 850, spread: 0.045, mag: 7, reloadMs: 1650 },
   machine_pistol: { name: 'Machine Pistol', price: 190, damage: 9, range: 280, cooldown: 80, speed: 660, spread: 0.22, mag: 24, reloadMs: 1700 },
@@ -230,8 +230,8 @@ function addPlayer(room, name) {
     maxHp: 10,
     money: 90,
     gun: 'glock',
-    wood: 0,
-    stone: 0,
+    wood: 30,
+    stone: 12,
     iron: 0,
     food: 100,
     seeds: 2,
@@ -283,7 +283,7 @@ function snapshot(room, playerId) {
     trees: room.trees,
     rocks: room.rocks,
     crops: room.crops,
-    buildings: room.buildings
+    buildings: room.buildings.filter(building => building.type !== 'trap' || building.owner === playerId)
   };
 }
 
@@ -300,6 +300,43 @@ function finishReload(player, now) {
     player.ammo = gun.mag;
     player.reloadingUntil = 0;
   }
+}
+
+function damageWolf(room, wolf, damage, owner) {
+  wolf.hp -= damage;
+  if (wolf.hp > 0) return false;
+  room.wolves = room.wolves.filter(w => w.id !== wolf.id);
+  if (owner) {
+    owner.money += wolf.den ? 120 : 32;
+    owner.score += wolf.den ? 8 : 1;
+    if (room.lifesteal) {
+      owner.hp = clamp(owner.hp + 1, 1, owner.maxHp + 4);
+      owner.maxHp = clamp(owner.maxHp + 0.25, 10, 20);
+    }
+  }
+  giveLoot(room, wolf);
+  room.events.push(`${owner?.name || 'A player'} killed a ${wolf.den ? 'den wolf' : 'wolf'}.`);
+  return true;
+}
+
+function hitWolfByRay(room, player, angle, range, damage) {
+  let best = null;
+  let bestForward = Infinity;
+  const dirX = Math.cos(angle);
+  const dirY = Math.sin(angle);
+  for (const wolf of room.wolves) {
+    const dx = wolf.x - player.x;
+    const dy = wolf.y - player.y;
+    const forward = dx * dirX + dy * dirY;
+    if (forward <= 0 || forward > range) continue;
+    const side = Math.abs(dx * dirY - dy * dirX);
+    const hitWidth = wolf.den ? 70 : 42;
+    if (side <= hitWidth && forward < bestForward) {
+      best = wolf;
+      bestForward = forward;
+    }
+  }
+  if (best) damageWolf(room, best, damage, player);
 }
 
 function fire(room, player, now, aiming = false) {
@@ -328,6 +365,7 @@ function fire(room, player, now, aiming = false) {
       damage,
       life: gun.range / gun.speed
     });
+    hitWolfByRay(room, player, angle, gun.range, damage);
   }
   if (player.ammo <= 0) room.events.push(`${player.name}'s ${gun.name} is empty. Press R to reload.`);
 }
@@ -534,6 +572,14 @@ function tickRoom(room, dt) {
     player.x = clamp(player.x + ax / len * speed * dt, 80, WORLD_SIZE - 80);
     player.y = clamp(player.y + ay / len * speed * dt, 80, WORLD_SIZE - 80);
     if (Number.isFinite(input.aim)) player.aim = input.aim;
+
+    for (const hazard of room.buildings) {
+      if ((hazard.type === 'spikes' || hazard.type === 'trap') && hazard.owner !== player.id && dist(player, hazard) < 42) {
+        const materialBoost = hazard.material === 'iron' ? 1.9 : hazard.material === 'stone' ? 1.45 : 1;
+        player.hp -= dt * (hazard.type === 'trap' ? 3.4 : 1.9) * materialBoost;
+      }
+    }
+
     if (input.shoot && input.mode === 'build') buildThing(room, player, now, input.buildType, input.buildTarget);
     else if (input.shoot && input.tool === 'plant') plantCrop(room, player, now);
     else if (input.shoot && input.tool === 'axe') swingTool(room, player, now, 'axe');
@@ -541,7 +587,7 @@ function tickRoom(room, dt) {
     else if (input.shoot && input.tool === 'hammer') {
       if (!repairBuilding(room, player)) upgradeBuilding(room, player, input.upgradeTarget || 'stone');
     }
-    else if (input.shoot) fire(room, player, now, Boolean(input.aimDown));
+    else if (input.shoot && input.tool === 'gun') fire(room, player, now, Boolean(input.aimDown));
     if (input.reload && input.tool === 'gun') startReload(room, player, now);
     if (input.axe) swingTool(room, player, now, 'axe');
     if (input.build) buildThing(room, player, now, input.buildType, input.buildTarget);
@@ -617,7 +663,7 @@ function tickRoom(room, dt) {
         wolf.y -= dy / len * wolf.speed * dt * 0.9;
         wall.hp -= wolf.damage * dt * 8;
         if (wall.type === 'spikes' || wall.type === 'trap') {
-          wolf.hp -= dt * (wall.material === 'iron' ? 42 : wall.material === 'stone' ? 28 : 18);
+          damageWolf(room, wolf, dt * (wall.material === 'iron' ? 42 : wall.material === 'stone' ? 28 : 18), room.players.get(wall.owner));
         }
         if (wall.type === 'campfire' && target.hp < target.maxHp && dist(target, wall) < 95) {
           target.hp = clamp(target.hp + dt * 0.55, 1, target.maxHp);
@@ -652,18 +698,8 @@ function tickRoom(room, dt) {
     }
     for (const wolf of [...room.wolves]) {
       if (!remove && dist(bullet, wolf) < (wolf.den ? 38 : 27)) {
-        wolf.hp -= bullet.damage;
+        damageWolf(room, wolf, bullet.damage, owner);
         remove = true;
-        if (wolf.hp <= 0) {
-          room.wolves = room.wolves.filter(w => w.id !== wolf.id);
-          if (owner) {
-            owner.money += wolf.den ? 120 : 32;
-            owner.score += wolf.den ? 8 : 1;
-            if (room.lifesteal) owner.hp = clamp(owner.hp + 1, 1, owner.maxHp + 4);
-            if (room.lifesteal) owner.maxHp = clamp(owner.maxHp + 0.25, 10, 20);
-          }
-          giveLoot(room, wolf);
-        }
       }
     }
     if (!remove && dist(bullet, room.den) < 86) {
