@@ -7,6 +7,10 @@ A 3D isometric browser multiplayer survival shooter with a grounded survival-gam
 - `WASD`: move in isometric view
 - Mouse: aim
 - Left click: shoot, use tool, or place selected build
+- Build slots show a green/red placement preview on the map before placing
+- Hold right click with a gun: aim for more damage and less spread, but move slower
+- `R`: reload the current gun
+- Craft Pickaxe: unlocks the pickaxe hotbar slot for mining stone and iron faster
 - Click trader: open trade menu
 - Mouse wheel: scroll the hotbar
 - `B`: toggle build mode

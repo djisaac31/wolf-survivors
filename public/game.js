@@ -38,6 +38,7 @@ const ui = {
 const slots = [
   { label: 'Glock', kind: 'gun', icon: 'G' },
   { label: 'Axe', kind: 'axe', icon: 'A' },
+  { label: 'Pickaxe', kind: 'pickaxe', icon: 'P' },
   { label: 'Hammer', kind: 'hammer', icon: 'H' },
   { label: 'Seeds', kind: 'plant', icon: 'S' },
   { label: 'Wall', kind: 'build', buildType: 'wall', icon: '1' },
@@ -50,7 +51,7 @@ const slots = [
   { label: 'Bench', kind: 'build', buildType: 'bench', icon: '8' }
 ];
 
-const input = { up: false, down: false, left: false, right: false, sprint: false, shoot: false, firstPerson: false };
+const input = { up: false, down: false, left: false, right: false, sprint: false, shoot: false, aimDown: false, reload: false, firstPerson: false };
 let state = null;
 let playerId = null;
 let roomCode = null;
@@ -73,6 +74,9 @@ let camera;
 let renderer;
 let worldGroup;
 let groundLayer;
+let buildPreview;
+let buildPreviewType = null;
+let buildPreviewValid = null;
 const objectMeshes = new Map();
 const labelTextures = new Map();
 
@@ -263,6 +267,22 @@ window.addEventListener('resize', resize);
 
 function material(color) {
   return new THREE.MeshLambertMaterial({ color });
+}
+
+function setGhostMaterial(root, valid) {
+  const color = valid ? 0x77c98d : 0xd05555;
+  root.traverse(child => {
+    if (child.isMesh) {
+      child.material = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.44,
+        depthWrite: false
+      });
+      child.castShadow = false;
+      child.receiveShadow = false;
+    }
+  });
 }
 
 function makeTree() {
@@ -551,6 +571,44 @@ function syncWorld() {
   }
 }
 
+function canPreviewBuild(point) {
+  const me = self();
+  const spec = state?.buildTypes?.[buildType];
+  if (!me || !spec || !point) return false;
+  if (Math.hypot(point.x - me.x, point.y - me.y) > 175) return false;
+  if (Math.hypot(point.x - state.room.survivor.x, point.y - state.room.survivor.y) < (state.outpostRadius || 220)) return false;
+  if (Math.hypot(point.x - state.room.den.x, point.y - state.room.den.y) < 130) return false;
+  if ((state.buildings || []).some(b => Math.hypot(point.x - b.x, point.y - b.y) < 52)) return false;
+  if ((state.players || []).some(p => Math.hypot(point.x - p.x, point.y - p.y) < 42)) return false;
+  return me.wood >= (spec.wood || 0) && me.stone >= (spec.stone || 0) && me.iron >= (spec.iron || 0);
+}
+
+function updateBuildPreview() {
+  if (!worldGroup || !state) return;
+  const slot = selected();
+  const point = worldFromMouse();
+  const active = buildMode && slot.kind === 'build' && point;
+  if (!active) {
+    if (buildPreview) buildPreview.visible = false;
+    return;
+  }
+  if (!buildPreview || buildPreviewType !== buildType) {
+    if (buildPreview) worldGroup.remove(buildPreview);
+    buildPreview = makeBuilding(buildType, 'wood');
+    buildPreviewType = buildType;
+    buildPreviewValid = null;
+    worldGroup.add(buildPreview);
+  }
+  const valid = canPreviewBuild(point);
+  if (buildPreviewValid !== valid) {
+    setGhostMaterial(buildPreview, valid);
+    buildPreviewValid = valid;
+  }
+  buildPreview.visible = true;
+  buildPreview.position.set(...to3(point, 0.035));
+  buildPreview.rotation.y = -aim;
+}
+
 async function api(path, options = {}) {
   const res = await fetch(path, {
     ...options,
@@ -625,7 +683,7 @@ function renderHotbar() {
   const me = self();
   ui.hotbar.innerHTML = slots.map((slot, index) => {
     const active = index === selectedSlot ? ' active' : '';
-    const locked = slot.kind === 'hammer' && !me?.hasHammer ? ' locked' : '';
+    const locked = (slot.kind === 'hammer' && !me?.hasHammer) || (slot.kind === 'pickaxe' && !me?.hasPickaxe) ? ' locked' : '';
     return `<button class="slot${active}${locked}" data-slot="${index}"><span>${index + 1}</span><strong>${slot.icon}</strong><em>${slot.label}</em></button>`;
   }).join('');
   ui.hotbar.querySelectorAll('button').forEach(button => {
@@ -675,6 +733,8 @@ function selectSlot(index) {
   if (slot.kind === 'build') {
     buildMode = true;
     buildType = slot.buildType;
+  } else {
+    buildMode = false;
   }
   renderHotbar();
 }
@@ -691,7 +751,9 @@ window.addEventListener('keydown', event => {
     renderCraftMenu();
   }
   if (key === 'h') healRequest = true;
+  if (key === 'r') input.reload = true;
   if (key === 'c') craftRequest = 'hammer';
+  if (key === 'p') craftRequest = 'pickaxe';
   if (key === 'u') upgradeTarget = upgradeTarget === 'stone' ? 'iron' : 'stone';
   if (key === 'b') buildMode = !buildMode;
   if (/^[1-9]$/.test(key)) {
@@ -699,7 +761,7 @@ window.addEventListener('keydown', event => {
     const buildKeys = ['wall', 'spikes', 'gate', 'tower', 'platform', 'trap', 'campfire', 'bench'];
     if (buildMode && n <= buildKeys.length) {
       buildType = buildKeys[n - 1];
-      selectSlot(4 + n - 1);
+      selectSlot(5 + n - 1);
     } else selectSlot(n - 1);
   }
 });
@@ -711,22 +773,32 @@ window.addEventListener('keyup', event => {
   if (key === 'a' || key === 'arrowleft') input.left = false;
   if (key === 'd' || key === 'arrowright') input.right = false;
   if (key === 'shift') input.sprint = false;
+  if (key === 'r') input.reload = false;
 });
 
 canvas.addEventListener('mousemove', event => {
   mouse = { x: event.clientX, y: event.clientY };
 });
-canvas.addEventListener('mousedown', () => {
+canvas.addEventListener('contextmenu', event => event.preventDefault());
+canvas.addEventListener('mousedown', event => {
   const me = self();
   if (!me || !state) return;
+  if (event.button === 2) {
+    input.aimDown = true;
+    return;
+  }
+  if (event.button !== 0) return;
   const point = worldFromMouse();
-  if (point && Math.hypot(point.x - state.room.survivor.x, point.y - state.room.survivor.y) < 95 && Math.hypot(me.x - state.room.survivor.x, me.y - state.room.survivor.y) < 125) {
+  if (!buildMode && point && Math.hypot(point.x - state.room.survivor.x, point.y - state.room.survivor.y) < 95 && Math.hypot(me.x - state.room.survivor.x, me.y - state.room.survivor.y) < 125) {
     tradeMenuOpen = true;
     return;
   }
   input.shoot = true;
 });
-window.addEventListener('mouseup', () => input.shoot = false);
+window.addEventListener('mouseup', event => {
+  if (event.button === 0) input.shoot = false;
+  if (event.button === 2) input.aimDown = false;
+});
 window.addEventListener('wheel', event => {
   selectSlot((selectedSlot + (event.deltaY > 0 ? 1 : -1) + slots.length) % slots.length);
 }, { passive: true });
@@ -737,11 +809,13 @@ async function sendInput() {
   const point = worldFromMouse();
   if (me && point) aim = Math.atan2(point.y - me.y, point.x - me.x);
   const slot = selected();
+  const placingBuild = buildMode && slot.kind === 'build';
   const payload = {
     ...input,
     aim,
-    mode: buildMode ? 'build' : 'use',
+    mode: placingBuild ? 'build' : 'use',
     buildType,
+    buildTarget: placingBuild && point ? { x: point.x, y: point.y } : null,
     tool: slot.kind,
     upgradeTarget,
     buy: buyRequest,
@@ -750,6 +824,7 @@ async function sendInput() {
     heal: healRequest,
     craft: craftRequest
   };
+  input.reload = false;
   buyRequest = null;
   buyItemRequest = null;
   sellRequest = false;
@@ -780,7 +855,9 @@ function updateHud() {
   ui.hudCode.textContent = roomCode;
   ui.hudHp.textContent = `${Math.ceil(me.hp)}/${Math.round(me.maxHp)}`;
   ui.hudMoney.textContent = `${Math.floor(me.money)}`;
-  ui.hudGun.textContent = state.guns[me.gun]?.name || me.gun;
+  const gun = state.guns[me.gun] || {};
+  const reloadText = me.reloading ? `reloading ${Math.ceil((me.reloadMsLeft || 0) / 1000)}s` : `${me.ammo ?? gun.mag ?? 0}/${gun.mag ?? 0}`;
+  ui.hudGun.textContent = `${gun.name || me.gun} ${reloadText}`;
   ui.hudWood.textContent = `${Math.floor(me.wood || 0)}`;
   ui.hudStone.textContent = `${Math.floor(me.stone || 0)}`;
   ui.hudIron.textContent = `${Math.floor(me.iron || 0)}`;
@@ -791,7 +868,7 @@ function updateHud() {
   renderGunShop();
   ui.tradeMenu.hidden = !tradeMenuOpen;
   const mode = buildMode ? `Build: ${buildType}` : selected().label;
-  ui.buildPanel.textContent = `${mode} | B build | E craft | click trader to trade`;
+  ui.buildPanel.textContent = `${mode} | green preview can build | red blocked | left click place | B build | E craft`;
   renderCraftMenu();
 }
 
@@ -799,6 +876,7 @@ function animate() {
   requestAnimationFrame(animate);
   if (!state || !renderer || !camera) return;
   syncWorld();
+  updateBuildPreview();
   updateCamera();
   updateHud();
   renderer.render(scene, camera);

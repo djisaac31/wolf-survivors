@@ -219,7 +219,7 @@ label {
 
 #hotbar {
   display: grid;
-  grid-template-columns: repeat(12, minmax(58px, 1fr));
+  grid-template-columns: repeat(13, minmax(54px, 1fr));
   gap: .25rem;
 }
 
@@ -381,7 +381,7 @@ label {
 
   #hotbar {
     overflow-x: auto;
-    grid-template-columns: repeat(12, 54px);
+    grid-template-columns: repeat(13, 54px);
     scrollbar-width: none;
   }
 
