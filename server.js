@@ -7,35 +7,36 @@ const PORT = Number(process.env.PORT || 4190);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const TICK_RATE = 12;
 const ROOM_TTL_MS = 1000 * 60 * 60 * 3;
+const WAVE_MS = 1000 * 60 * 2;
 
 const GUNS = {
-  glock: { name: 'Glock', price: 0, damage: 24, range: 520, cooldown: 430, speed: 820, spread: 0.07, mag: 15, reloadMs: 1350 },
-  pistol: { name: 'Pistol', price: 0, damage: 24, range: 520, cooldown: 430, speed: 820, spread: 0.07, mag: 15, reloadMs: 1350 },
-  revolver: { name: 'Revolver', price: 140, damage: 34, range: 380, cooldown: 650, speed: 790, spread: 0.055, mag: 6, reloadMs: 1850 },
-  deagle: { name: 'Desert Eagle', price: 240, damage: 46, range: 430, cooldown: 760, speed: 850, spread: 0.045, mag: 7, reloadMs: 1650 },
-  machine_pistol: { name: 'Machine Pistol', price: 190, damage: 9, range: 280, cooldown: 80, speed: 660, spread: 0.22, mag: 24, reloadMs: 1700 },
-  smg: { name: 'SMG', price: 150, damage: 10, range: 310, cooldown: 105, speed: 690, spread: 0.18, mag: 30, reloadMs: 1750 },
-  mp5: { name: 'MP5', price: 300, damage: 13, range: 360, cooldown: 95, speed: 735, spread: 0.13, mag: 30, reloadMs: 1750 },
-  vector: { name: 'Vector', price: 430, damage: 11, range: 330, cooldown: 58, speed: 720, spread: 0.16, mag: 25, reloadMs: 1650 },
-  uzi: { name: 'Uzi', price: 260, damage: 10, range: 285, cooldown: 70, speed: 680, spread: 0.24, mag: 32, reloadMs: 1850 },
-  rifle: { name: 'Hunting Rifle', price: 320, damage: 25, range: 520, cooldown: 520, speed: 900, spread: 0.04, mag: 5, reloadMs: 1900 },
-  carbine: { name: 'Carbine', price: 420, damage: 20, range: 480, cooldown: 185, speed: 860, spread: 0.065, mag: 20, reloadMs: 1850 },
-  m4a1: { name: 'M4A1', price: 520, damage: 22, range: 560, cooldown: 155, speed: 940, spread: 0.055, mag: 30, reloadMs: 2050 },
-  ak47: { name: 'AK-47', price: 610, damage: 30, range: 520, cooldown: 190, speed: 900, spread: 0.09, mag: 30, reloadMs: 2150 },
-  scar: { name: 'SCAR-H', price: 720, damage: 34, range: 590, cooldown: 230, speed: 960, spread: 0.055, mag: 20, reloadMs: 2200 },
-  famas: { name: 'FAMAS', price: 560, damage: 19, range: 500, cooldown: 115, speed: 900, spread: 0.08, mag: 25, reloadMs: 2000 },
-  aug: { name: 'AUG', price: 640, damage: 24, range: 575, cooldown: 170, speed: 940, spread: 0.045, mag: 30, reloadMs: 2100 },
-  shotgun: { name: 'Shotgun', price: 260, damage: 13, range: 240, cooldown: 780, speed: 620, spread: 0.34, pellets: 7, mag: 6, reloadMs: 2100 },
-  pump_shotgun: { name: 'Pump Shotgun', price: 360, damage: 16, range: 260, cooldown: 920, speed: 650, spread: 0.31, pellets: 8, mag: 5, reloadMs: 2250 },
-  auto_shotgun: { name: 'Auto Shotgun', price: 690, damage: 10, range: 230, cooldown: 310, speed: 630, spread: 0.38, pellets: 7, mag: 8, reloadMs: 2450 },
-  marksman: { name: 'Marksman Rifle', price: 620, damage: 48, range: 700, cooldown: 720, speed: 1060, spread: 0.025, mag: 10, reloadMs: 2350 },
-  sniper: { name: 'Sniper Rifle', price: 650, damage: 68, range: 820, cooldown: 1180, speed: 1150, spread: 0.015, mag: 5, reloadMs: 2600 },
-  awp: { name: 'AWP', price: 1050, damage: 110, range: 940, cooldown: 1650, speed: 1280, spread: 0.008, mag: 5, reloadMs: 3000 },
-  lmg: { name: 'LMG', price: 880, damage: 20, range: 500, cooldown: 115, speed: 850, spread: 0.13, mag: 60, reloadMs: 3450 },
-  minigun: { name: 'Minigun', price: 1450, damage: 15, range: 460, cooldown: 42, speed: 820, spread: 0.2, mag: 90, reloadMs: 4200 },
-  crossbow: { name: 'Crossbow', price: 280, damage: 42, range: 470, cooldown: 860, speed: 620, spread: 0.025, mag: 1, reloadMs: 1150 },
-  laser_rifle: { name: 'Laser Rifle', price: 1300, damage: 40, range: 760, cooldown: 260, speed: 1400, spread: 0.01, mag: 18, reloadMs: 2400 },
-  railgun: { name: 'Railgun', price: 1800, damage: 145, range: 980, cooldown: 1900, speed: 1600, spread: 0.006, mag: 3, reloadMs: 3200 }
+  glock: { name: 'Glock', price: 0, damage: 24, range: 520, cooldown: 430, speed: 820, spread: 0.07, mag: 15, reloadMs: 1350, ammoType: 'light' },
+  pistol: { name: 'Pistol', price: 0, damage: 24, range: 520, cooldown: 430, speed: 820, spread: 0.07, mag: 15, reloadMs: 1350, ammoType: 'light' },
+  revolver: { name: 'Revolver', price: 140, damage: 34, range: 380, cooldown: 650, speed: 790, spread: 0.055, mag: 6, reloadMs: 1850, ammoType: 'light' },
+  deagle: { name: 'Desert Eagle', price: 240, damage: 46, range: 430, cooldown: 760, speed: 850, spread: 0.045, mag: 7, reloadMs: 1650, ammoType: 'heavy' },
+  machine_pistol: { name: 'Machine Pistol', price: 190, damage: 9, range: 280, cooldown: 80, speed: 660, spread: 0.22, mag: 24, reloadMs: 1700, ammoType: 'light' },
+  smg: { name: 'SMG', price: 150, damage: 10, range: 310, cooldown: 105, speed: 690, spread: 0.18, mag: 30, reloadMs: 1750, ammoType: 'light' },
+  mp5: { name: 'MP5', price: 300, damage: 13, range: 360, cooldown: 95, speed: 735, spread: 0.13, mag: 30, reloadMs: 1750, ammoType: 'light' },
+  vector: { name: 'Vector', price: 430, damage: 11, range: 330, cooldown: 58, speed: 720, spread: 0.16, mag: 25, reloadMs: 1650, ammoType: 'light' },
+  uzi: { name: 'Uzi', price: 260, damage: 10, range: 285, cooldown: 70, speed: 680, spread: 0.24, mag: 32, reloadMs: 1850, ammoType: 'light' },
+  rifle: { name: 'Hunting Rifle', price: 320, damage: 25, range: 520, cooldown: 520, speed: 900, spread: 0.04, mag: 5, reloadMs: 1900, ammoType: 'heavy' },
+  carbine: { name: 'Carbine', price: 420, damage: 20, range: 480, cooldown: 185, speed: 860, spread: 0.065, mag: 20, reloadMs: 1850, ammoType: 'heavy' },
+  m4a1: { name: 'M4A1', price: 520, damage: 22, range: 560, cooldown: 155, speed: 940, spread: 0.055, mag: 30, reloadMs: 2050, ammoType: 'heavy' },
+  ak47: { name: 'AK-47', price: 610, damage: 30, range: 520, cooldown: 190, speed: 900, spread: 0.09, mag: 30, reloadMs: 2150, ammoType: 'heavy' },
+  scar: { name: 'SCAR-H', price: 720, damage: 34, range: 590, cooldown: 230, speed: 960, spread: 0.055, mag: 20, reloadMs: 2200, ammoType: 'heavy' },
+  famas: { name: 'FAMAS', price: 560, damage: 19, range: 500, cooldown: 115, speed: 900, spread: 0.08, mag: 25, reloadMs: 2000, ammoType: 'heavy' },
+  aug: { name: 'AUG', price: 640, damage: 24, range: 575, cooldown: 170, speed: 940, spread: 0.045, mag: 30, reloadMs: 2100, ammoType: 'heavy' },
+  shotgun: { name: 'Shotgun', price: 260, damage: 13, range: 240, cooldown: 780, speed: 620, spread: 0.34, pellets: 7, mag: 6, reloadMs: 2100, ammoType: 'shells' },
+  pump_shotgun: { name: 'Pump Shotgun', price: 360, damage: 16, range: 260, cooldown: 920, speed: 650, spread: 0.31, pellets: 8, mag: 5, reloadMs: 2250, ammoType: 'shells' },
+  auto_shotgun: { name: 'Auto Shotgun', price: 690, damage: 10, range: 230, cooldown: 310, speed: 630, spread: 0.38, pellets: 7, mag: 8, reloadMs: 2450, ammoType: 'shells' },
+  marksman: { name: 'Marksman Rifle', price: 620, damage: 48, range: 700, cooldown: 720, speed: 1060, spread: 0.025, mag: 10, reloadMs: 2350, ammoType: 'heavy' },
+  sniper: { name: 'Sniper Rifle', price: 650, damage: 68, range: 820, cooldown: 1180, speed: 1150, spread: 0.015, mag: 5, reloadMs: 2600, ammoType: 'heavy' },
+  awp: { name: 'AWP', price: 1050, damage: 110, range: 940, cooldown: 1650, speed: 1280, spread: 0.008, mag: 5, reloadMs: 3000, ammoType: 'heavy' },
+  lmg: { name: 'LMG', price: 880, damage: 20, range: 500, cooldown: 115, speed: 850, spread: 0.13, mag: 60, reloadMs: 3450, ammoType: 'heavy' },
+  minigun: { name: 'Minigun', price: 1450, damage: 15, range: 460, cooldown: 42, speed: 820, spread: 0.2, mag: 90, reloadMs: 4200, ammoType: 'heavy' },
+  crossbow: { name: 'Crossbow', price: 280, damage: 42, range: 470, cooldown: 860, speed: 620, spread: 0.025, mag: 1, reloadMs: 1150, ammoType: 'bolts' },
+  laser_rifle: { name: 'Laser Rifle', price: 1300, damage: 40, range: 760, cooldown: 260, speed: 1400, spread: 0.01, mag: 18, reloadMs: 2400, ammoType: 'cells' },
+  railgun: { name: 'Railgun', price: 1800, damage: 145, range: 980, cooldown: 1900, speed: 1600, spread: 0.006, mag: 3, reloadMs: 3200, ammoType: 'cells' }
 };
 const AUTO_GUNS = new Set(['machine_pistol', 'smg', 'mp5', 'vector', 'uzi', 'carbine', 'm4a1', 'ak47', 'scar', 'famas', 'aug', 'auto_shotgun', 'lmg', 'minigun', 'laser_rifle']);
 for (const [id, gun] of Object.entries(GUNS)) gun.auto = AUTO_GUNS.has(id);
@@ -55,16 +56,30 @@ const BUILD_TYPES = {
 const CRAFT_RECIPES = {
   hammer: { name: 'Upgrade Hammer', wood: 18, stone: 10, iron: 0 },
   pickaxe: { name: 'Wooden Pickaxe', wood: 16, stone: 0, iron: 0 },
+  wool_armor: { name: 'Wool Padding Armor', wood: 10, stone: 0, iron: 0 },
+  iron_armor: { name: 'Iron Armor', wood: 6, stone: 10, iron: 8 },
   field_kit: { name: 'Field Kit', wood: 4, stone: 0, iron: 2 },
   camp_meal: { name: 'Camp Meal', wood: 2, stone: 0, iron: 0, foodCost: 2 },
   seed_pack: { name: 'Seed Pack', wood: 6, stone: 0, iron: 0 },
+  light_ammo: { name: 'Light Ammo Pack', wood: 6, stone: 0, iron: 0 },
+  heavy_ammo: { name: 'Heavy Ammo Pack', wood: 0, stone: 6, iron: 2 },
   cash_bundle: { name: 'Trader Goods', wood: 0, stone: 10, iron: 4 }
 };
 const TRADER_ITEMS = {
   food: { name: 'Food Ration', price: 35 },
   seeds: { name: 'Seed Pack', price: 55 },
   wood: { name: 'Wood Bundle', price: 45 },
-  stone: { name: 'Stone Bundle', price: 65 }
+  stone: { name: 'Stone Bundle', price: 65 },
+  ammo_light: { name: 'Light Ammo', price: 35 },
+  ammo_heavy: { name: 'Heavy Ammo', price: 55 },
+  ammo_shells: { name: 'Shell Ammo', price: 50 },
+  armor_wool: { name: 'Wool Armor', price: 80 },
+  armor_iron: { name: 'Iron Armor', price: 240 }
+};
+const ARMOR = {
+  none: { name: 'No Armor', reduction: 0 },
+  wool: { name: 'Wool Armor', reduction: 0.18 },
+  iron: { name: 'Iron Armor', reduction: 0.36 }
 };
 const UPGRADE_COSTS = {
   stone: { stone: 14, iron: 0, hpBoost: 1.8 },
@@ -176,6 +191,9 @@ function makeRoom({ worldName, pvp = false, lifesteal = false }) {
     createdAt: Date.now(),
     lastSeen: Date.now(),
     den,
+    wave: 1,
+    night: 1,
+    nextWaveAt: Date.now() + WAVE_MS,
     players: new Map(),
     bullets: [],
     wolves: [],
@@ -235,6 +253,8 @@ function addPlayer(room, name) {
     money: 90,
     gun: 'glock',
     ownedGuns: ['glock'],
+    ammoReserve: { light: 45, heavy: 10, shells: 8, bolts: 4, cells: 0 },
+    armor: 'none',
     wood: 30,
     stone: 12,
     iron: 0,
@@ -266,6 +286,9 @@ function snapshot(room, playerId) {
       name: room.name,
       pvp: room.pvp,
       lifesteal: room.lifesteal,
+      wave: room.wave,
+      night: room.night,
+      nextWaveAt: room.nextWaveAt,
       den: room.den,
       survivor: room.survivor,
       events: room.events.slice(-7)
@@ -278,6 +301,7 @@ function snapshot(room, playerId) {
     players: [...room.players.values()].map(p => ({
       id: p.id, name: p.name, x: p.x, y: p.y, aim: p.aim, hp: p.hp, maxHp: p.maxHp,
       money: p.money, gun: p.gun, ownedGuns: p.ownedGuns, wood: p.wood, stone: p.stone, iron: p.iron,
+      ammoReserve: p.ammoReserve, armor: p.armor,
       food: p.food, seeds: p.seeds, hasHammer: p.hasHammer, hasPickaxe: p.hasPickaxe, inventory: p.inventory,
       ammo: p.ammo, reloading: p.reloadingUntil > Date.now(), reloadMsLeft: Math.max(0, p.reloadingUntil - Date.now()),
       score: p.score, downed: p.downedUntil > Date.now()
@@ -296,6 +320,11 @@ function snapshot(room, playerId) {
 function startReload(room, player, now) {
   const gun = GUNS[player.gun] || GUNS.pistol;
   if (player.downedUntil > now || player.reloadingUntil > now || player.ammo >= gun.mag) return;
+  const reserve = player.ammoReserve?.[gun.ammoType] || 0;
+  if (reserve <= 0) {
+    notice(room, player, `${player.name} needs ${gun.ammoType} ammo to reload.`, now);
+    return;
+  }
   player.reloadingUntil = now + gun.reloadMs;
   room.events.push(`${player.name} is reloading ${gun.name}.`);
 }
@@ -303,7 +332,11 @@ function startReload(room, player, now) {
 function finishReload(player, now) {
   const gun = GUNS[player.gun] || GUNS.pistol;
   if (player.reloadingUntil && player.reloadingUntil <= now) {
-    player.ammo = gun.mag;
+    const needed = gun.mag - player.ammo;
+    const reserve = player.ammoReserve?.[gun.ammoType] || 0;
+    const loaded = Math.min(needed, reserve);
+    player.ammo += loaded;
+    player.ammoReserve[gun.ammoType] = reserve - loaded;
     player.reloadingUntil = 0;
   }
 }
@@ -427,6 +460,11 @@ function notice(room, player, message, now = Date.now()) {
   room.events.push(message);
 }
 
+function hurtPlayer(player, amount) {
+  const reduction = ARMOR[player.armor || 'none']?.reduction || 0;
+  player.hp -= amount * (1 - reduction);
+}
+
 function buildThing(room, player, now, type = 'wall', target = null) {
   const spec = BUILD_TYPES[type] || BUILD_TYPES.wall;
   if (now - player.lastBuild < 360 || player.downedUntil > now) return;
@@ -472,6 +510,7 @@ function buildThing(room, player, now, type = 'wall', target = null) {
     maxHp: spec.hp,
     owner: player.id
   });
+  room.events.push(`${player.name} built ${spec.name}.`);
 }
 
 function plantCrop(room, player, now, target = null) {
@@ -515,6 +554,12 @@ function craftItem(room, player, item) {
   } else if (item === 'pickaxe') {
     player.hasPickaxe = true;
     room.events.push(`${player.name} crafted a wooden pickaxe.`);
+  } else if (item === 'wool_armor') {
+    player.armor = 'wool';
+    room.events.push(`${player.name} crafted wool armor.`);
+  } else if (item === 'iron_armor') {
+    player.armor = 'iron';
+    room.events.push(`${player.name} crafted iron armor.`);
   } else if (item === 'field_kit') {
     player.hp = clamp(player.hp + 5, 1, player.maxHp);
     room.events.push(`${player.name} crafted and used a field kit.`);
@@ -524,6 +569,12 @@ function craftItem(room, player, item) {
   } else if (item === 'seed_pack') {
     player.seeds += 3;
     room.events.push(`${player.name} crafted seeds.`);
+  } else if (item === 'light_ammo') {
+    player.ammoReserve.light += 30;
+    room.events.push(`${player.name} crafted light ammo.`);
+  } else if (item === 'heavy_ammo') {
+    player.ammoReserve.heavy += 18;
+    room.events.push(`${player.name} crafted heavy ammo.`);
   } else if (item === 'cash_bundle') {
     player.money += 120;
     room.events.push(`${player.name} crafted trader goods for $120.`);
@@ -546,6 +597,11 @@ function buyTraderItem(room, player, item) {
   if (item === 'seeds') player.seeds += 4;
   if (item === 'wood') player.wood += 18;
   if (item === 'stone') player.stone += 14;
+  if (item === 'ammo_light') player.ammoReserve.light += 36;
+  if (item === 'ammo_heavy') player.ammoReserve.heavy += 24;
+  if (item === 'ammo_shells') player.ammoReserve.shells += 14;
+  if (item === 'armor_wool') player.armor = 'wool';
+  if (item === 'armor_iron') player.armor = 'iron';
   room.events.push(`${player.name} bought ${listing.name}.`);
 }
 
@@ -562,6 +618,10 @@ function upgradeBuilding(room, player, targetLevel) {
     if (building.type !== 'bench' && dist(hit, building) < 54 && (!target || dist(hit, building) < dist(hit, target))) target = building;
   }
   if (!target || target.material === targetLevel) return;
+  if (target.owner !== player.id) {
+    notice(room, player, `Only the owner can upgrade that base piece.`);
+    return;
+  }
   if (targetLevel === 'stone' && target.material !== 'wood') return;
   if (targetLevel === 'iron' && target.material !== 'stone') return;
   const cost = UPGRADE_COSTS[targetLevel];
@@ -584,6 +644,10 @@ function repairBuilding(room, player) {
     if (dist(hit, building) < 58 && (!target || dist(hit, building) < dist(hit, target))) target = building;
   }
   if (!target || target.hp >= target.maxHp) return false;
+  if (target.owner !== player.id) {
+    notice(room, player, `Only the owner can repair that base piece.`);
+    return false;
+  }
   const materialCost = target.material === 'iron'
     ? { wood: 0, stone: 2, iron: 2 }
     : target.material === 'stone'
@@ -597,9 +661,28 @@ function repairBuilding(room, player) {
   return true;
 }
 
+function spawnWave(room, now) {
+  if (room.den.defeated || now < room.nextWaveAt) return;
+  room.wave += 1;
+  room.night = room.wave;
+  room.nextWaveAt = now + WAVE_MS;
+  const count = Math.min(8 + room.wave * 2, 34);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 260 + Math.random() * 170;
+    const wolf = makeWolf(room.den.x + Math.cos(angle) * radius, room.den.y + Math.sin(angle) * radius, room.wave % 4 === 0 && i < 2);
+    wolf.hp += room.wave * 6;
+    wolf.maxHp = wolf.hp;
+    wolf.speed += Math.min(42, room.wave * 3);
+    room.wolves.push(wolf);
+  }
+  room.events.push(`Night ${room.night}: a wolf wave is coming.`);
+}
+
 function tickRoom(room, dt) {
   const now = Date.now();
   room.lastSeen = now;
+  spawnWave(room, now);
   const players = [...room.players.values()];
   for (const player of players) {
     if (now - player.lastSeen > 45000) continue;
@@ -638,7 +721,7 @@ function tickRoom(room, dt) {
     for (const hazard of room.buildings) {
       if ((hazard.type === 'spikes' || hazard.type === 'trap') && hazard.owner !== player.id && dist(player, hazard) < 42) {
         const materialBoost = hazard.material === 'iron' ? 1.9 : hazard.material === 'stone' ? 1.45 : 1;
-        player.hp -= dt * (hazard.type === 'trap' ? 3.4 : 1.9) * materialBoost;
+        hurtPlayer(player, dt * (hazard.type === 'trap' ? 3.4 : 1.9) * materialBoost);
       }
     }
 
@@ -671,6 +754,13 @@ function tickRoom(room, dt) {
       if (dist(player, loot) < 42) {
         if (loot.food) player.food = clamp(player.food + loot.food, 0, 100);
         else if (loot.seeds) player.seeds += loot.seeds;
+        else if (loot.kind === 'ammo') {
+          const types = ['light', 'heavy', 'shells', 'bolts', 'cells'];
+          const type = types[Math.floor(Math.random() * types.length)];
+          const amount = type === 'light' ? 30 : type === 'heavy' ? 18 : type === 'shells' ? 10 : type === 'bolts' ? 5 : 8;
+          player.ammoReserve[type] += amount;
+          room.events.push(`${player.name} picked up ${amount} ${type} ammo.`);
+        }
         else player.inventory.push({ kind: loot.kind, label: loot.label, value: loot.value });
         room.loot = room.loot.filter(l => l.id !== loot.id);
       }
@@ -755,7 +845,7 @@ function tickRoom(room, dt) {
       }
     }
     if (len < 38) {
-      target.hp -= wolf.damage * dt * 1.8;
+      hurtPlayer(target, wolf.damage * dt * 1.8);
       if (target.hp <= 0) {
         target.hp = 0;
         target.downedUntil = now + 4500;
@@ -799,7 +889,7 @@ function tickRoom(room, dt) {
     if (!remove && room.pvp) {
       for (const target of players) {
         if (target.id !== bullet.owner && target.downedUntil <= now && dist(bullet, target) < 24) {
-          target.hp -= Math.max(1, bullet.damage / 18);
+          hurtPlayer(target, Math.max(1, bullet.damage / 18));
           remove = true;
           if (owner && room.lifesteal) owner.hp = clamp(owner.hp + 0.5, 1, owner.maxHp);
           if (target.hp <= 0) {

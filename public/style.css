@@ -139,7 +139,9 @@ label {
 #buildPanel,
 #craftMenu,
 #inviteLink,
-#tip {
+#tip,
+#minimap,
+#respawnOverlay {
   position: fixed;
   z-index: 2;
 }
@@ -187,6 +189,41 @@ label {
   pointer-events: none;
 }
 
+#minimap {
+  right: .8rem;
+  top: 3.6rem;
+  width: 170px;
+  height: 170px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 6px;
+  background: rgba(9, 11, 10, .72);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
+}
+
+#respawnOverlay {
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: .45rem;
+  text-align: center;
+  background: rgba(8, 10, 9, .58);
+  z-index: 5;
+}
+
+#respawnOverlay[hidden] {
+  display: none;
+}
+
+#respawnOverlay strong {
+  font-size: clamp(2rem, 6vw, 4rem);
+  color: #e0c15a;
+}
+
+#respawnOverlay span {
+  color: #f4f0e8;
+  font-weight: 800;
+}
+
 #bottomHud {
   left: 50%;
   bottom: .7rem;
@@ -200,7 +237,7 @@ label {
 
 #quickStats {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: .3rem;
   margin-bottom: .38rem;
   color: #e7e0d6;
@@ -401,5 +438,12 @@ label {
 
   #tip {
     display: none;
+  }
+
+  #minimap {
+    width: 120px;
+    height: 120px;
+    top: 3.2rem;
+    right: .45rem;
   }
 }

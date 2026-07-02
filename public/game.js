@@ -20,6 +20,12 @@ const ui = {
   hudFood: document.getElementById('hudFood'),
   hudSeeds: document.getElementById('hudSeeds'),
   hudLoot: document.getElementById('hudLoot'),
+  hudArmor: document.getElementById('hudArmor'),
+  hudAmmo: document.getElementById('hudAmmo'),
+  hudNight: document.getElementById('hudNight'),
+  minimap: document.getElementById('minimap'),
+  respawnOverlay: document.getElementById('respawnOverlay'),
+  respawnText: document.getElementById('respawnText'),
   tradeMenu: document.getElementById('tradeMenu'),
   closeTrade: document.getElementById('closeTrade'),
   gunSelect: document.getElementById('gunSelect'),
@@ -70,6 +76,8 @@ let tradeMenuOpen = false;
 let mouse = { x: 0, y: 0 };
 let shotCounter = 0;
 let hotbarStateKey = '';
+let lastFeedText = '';
+let audioCtx = null;
 
 let scene;
 let camera;
@@ -84,6 +92,40 @@ const labelTextures = new Map();
 
 function self() {
   return state?.players.find(p => p.id === playerId);
+}
+
+function playTone(type) {
+  try {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const settings = {
+      shoot: [150, 0.035, 0.045],
+      build: [330, 0.045, 0.035],
+      trade: [560, 0.05, 0.03],
+      hurt: [92, 0.07, 0.055],
+      wave: [210, 0.12, 0.05],
+      harvest: [680, 0.06, 0.035]
+    }[type] || [440, 0.05, 0.03];
+    osc.frequency.value = settings[0];
+    gain.gain.value = settings[2];
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + settings[1]);
+  } catch {
+    audioCtx = null;
+  }
+}
+
+function soundForEvent(text) {
+  if (!text || text === lastFeedText) return;
+  lastFeedText = text;
+  if (/wave|Night/i.test(text)) playTone('wave');
+  else if (/built|upgraded|repaired/i.test(text)) playTone('build');
+  else if (/bought|sold|crafted/i.test(text)) playTone('trade');
+  else if (/knocked down|damage/i.test(text)) playTone('hurt');
+  else if (/harvested|picked up/i.test(text)) playTone('harvest');
 }
 
 function to3(entity, y = 0) {
@@ -532,6 +574,9 @@ function makePlayerMesh(player) {
   rightEar.scale.set(0.7, 1.4, 0.7);
   const gun = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.7), material(0x191713));
   gun.position.set(0.28, 0.78, -0.58);
+  const armorColor = player.armor === 'iron' ? 0x9aa4a8 : player.armor === 'wool' ? 0xcfc7b6 : null;
+  const armorPlate = armorColor ? new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.34, 0.78), material(armorColor)) : null;
+  if (armorPlate) armorPlate.position.set(0, 0.95, 0.1);
   const ring = isSelf ? new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.035, 8, 40), new THREE.MeshBasicMaterial({ color: 0xe0c15a })) : null;
   if (ring) {
     ring.rotation.x = Math.PI / 2;
@@ -539,6 +584,7 @@ function makePlayerMesh(player) {
   }
   const label = makeNameSprite(player.name, isSelf);
   g.add(body, wool, face, leftEar, rightEar, gun, label);
+  if (armorPlate) g.add(armorPlate);
   if (ring) g.add(ring);
   g.traverse(child => {
     if (child.isMesh) child.castShadow = true;
@@ -596,6 +642,17 @@ function syncWorld() {
   });
   (state.players || []).forEach(e => {
     const mesh = add(e.id, () => makePlayerMesh(e), e);
+    if (mesh.userData.armor !== e.armor || mesh.userData.name !== e.name) {
+      worldGroup.remove(mesh);
+      objectMeshes.delete(e.id);
+      const refreshed = add(e.id, () => makePlayerMesh(e), e);
+      refreshed.userData.armor = e.armor;
+      refreshed.userData.name = e.name;
+      refreshed.rotation.y = -e.aim;
+      return;
+    }
+    mesh.userData.armor = e.armor;
+    mesh.userData.name = e.name;
     mesh.rotation.y = -e.aim;
   });
   for (const [id, mesh] of objectMeshes) {
@@ -861,6 +918,7 @@ canvas.addEventListener('mousedown', event => {
   }
   input.shoot = true;
   input.shotId = ++shotCounter;
+  if (selected().kind === 'gun') playTone('shoot');
 });
 window.addEventListener('mouseup', event => {
   if (event.button === 0) input.shoot = false;
@@ -917,6 +975,33 @@ function updateCamera() {
   camera.lookAt(x, 0, z);
 }
 
+function drawMinimap() {
+  if (!ui.minimap || !state) return;
+  const ctx = ui.minimap.getContext('2d');
+  const size = ui.minimap.width;
+  const scale = size / 2400;
+  const dot = (entity, color, radius = 3) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(entity.x * scale, entity.y * scale, radius, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = 'rgba(25, 31, 28, .94)';
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = 'rgba(255,255,255,.18)';
+  ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
+  dot(state.room.survivor, '#77c98d', 5);
+  dot(state.room.den, '#d05555', 6);
+  (state.buildings || []).forEach(b => dot(b, b.owner === playerId ? '#e0c15a' : '#a9a9a9', 2.4));
+  (state.wolves || []).forEach(w => dot(w, w.den ? '#ff6b6b' : '#a83d45', w.den ? 3.5 : 2.2));
+  (state.players || []).forEach(p => dot(p, p.id === playerId ? '#ffffff' : '#69a7ff', p.id === playerId ? 4 : 3));
+  ctx.fillStyle = '#f4f0e8';
+  ctx.font = '700 10px system-ui';
+  ctx.fillText('Outpost', state.room.survivor.x * scale + 6, state.room.survivor.y * scale + 3);
+  ctx.fillText('Den', state.room.den.x * scale - 20, state.room.den.y * scale - 8);
+}
+
 function updateHud() {
   const me = self();
   if (!me || !state) return;
@@ -926,13 +1011,20 @@ function updateHud() {
   const gun = state.guns[me.gun] || {};
   const reloadText = me.reloading ? `reloading ${Math.ceil((me.reloadMsLeft || 0) / 1000)}s` : `${me.ammo ?? gun.mag ?? 0}/${gun.mag ?? 0}`;
   ui.hudGun.textContent = `${gun.name || me.gun} ${reloadText}`;
+  ui.hudAmmo.textContent = `${gun.ammoType || 'ammo'} ${me.ammoReserve?.[gun.ammoType] ?? 0}`;
+  ui.hudArmor.textContent = me.armor === 'iron' ? 'Iron' : me.armor === 'wool' ? 'Wool' : 'None';
+  ui.hudNight.textContent = `${state.room.night || 1}`;
   ui.hudWood.textContent = `${Math.floor(me.wood || 0)}`;
   ui.hudStone.textContent = `${Math.floor(me.stone || 0)}`;
   ui.hudIron.textContent = `${Math.floor(me.iron || 0)}`;
   ui.hudFood.textContent = `${Math.floor(me.food || 0)}`;
   ui.hudSeeds.textContent = `${Math.floor(me.seeds || 0)}`;
   ui.hudLoot.textContent = `${me.inventory.length}`;
-  ui.feed.textContent = state.room.events.slice(-1)[0] || '';
+  const feedText = state.room.events.slice(-1)[0] || '';
+  ui.feed.textContent = feedText;
+  soundForEvent(feedText);
+  ui.respawnOverlay.hidden = !me.downed;
+  if (me.downed) ui.respawnText.textContent = 'You will respawn at the outpost in a few seconds.';
   renderHotbar();
   renderGunShop();
   ui.tradeMenu.hidden = !tradeMenuOpen;
@@ -941,6 +1033,7 @@ function updateHud() {
     ? `${mode} | left click ground to plant | walk over grown crops to harvest`
     : `${mode} | green preview can build | red blocked | left click place | B build | E craft`;
   renderCraftMenu();
+  drawMinimap();
 }
 
 function animate() {

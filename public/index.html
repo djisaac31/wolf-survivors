@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wolf Den Survivors</title>
-  <link rel="stylesheet" href="/style.css?v=gun-hotbar-17">
+  <link rel="stylesheet" href="/style.css?v=survival-systems-18">
 </head>
 <body>
   <main id="shell">
@@ -45,10 +45,20 @@
         <button data-buy-item="seeds">Seeds</button>
         <button data-buy-item="wood">Wood</button>
         <button data-buy-item="stone">Stone</button>
+        <button data-buy-item="ammo_light">Light Ammo</button>
+        <button data-buy-item="ammo_heavy">Heavy Ammo</button>
+        <button data-buy-item="ammo_shells">Shells</button>
+        <button data-buy-item="armor_wool">Wool Armor</button>
+        <button data-buy-item="armor_iron">Iron Armor</button>
         <button id="sell">Sell</button>
         <button id="heal">Heal</button>
       </div>
       <button id="inviteLink" type="button">Copy Invite Link</button>
+      <canvas id="minimap" width="170" height="170"></canvas>
+      <div id="respawnOverlay" hidden>
+        <strong>Knocked Down</strong>
+        <span id="respawnText">Respawning...</span>
+      </div>
       <div id="buildPanel"></div>
       <div id="bottomHud">
         <div id="quickStats">
@@ -60,6 +70,9 @@
           <span>Iron <strong id="hudIron">0</strong></span>
           <span>Seeds <strong id="hudSeeds">2</strong></span>
           <span>Loot <strong id="hudLoot">0</strong></span>
+          <span>Armor <strong id="hudArmor">None</strong></span>
+          <span>Ammo <strong id="hudAmmo">0</strong></span>
+          <span>Night <strong id="hudNight">1</strong></span>
           <span>Gun <strong id="hudGun">Glock</strong></span>
         </div>
         <div id="hotbar"></div>
@@ -76,6 +89,6 @@
     </section>
   </main>
   <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
-  <script src="/game.js?v=gun-hotbar-17"></script>
+  <script src="/game.js?v=survival-systems-18"></script>
 </body>
 </html>
