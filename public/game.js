@@ -38,7 +38,7 @@ const ui = {
 const slots = [
   { label: 'Glock', kind: 'gun', icon: 'G' },
   { label: 'Axe', kind: 'axe', icon: 'A' },
-  { label: 'Pickaxe', kind: 'pickaxe', icon: 'P' },
+  { label: 'Wood Pick', kind: 'pickaxe', icon: 'P' },
   { label: 'Hammer', kind: 'hammer', icon: 'H' },
   { label: 'Seeds', kind: 'plant', icon: 'S' },
   { label: 'Wall', kind: 'build', buildType: 'wall', icon: '1' },
@@ -51,7 +51,7 @@ const slots = [
   { label: 'Bench', kind: 'build', buildType: 'bench', icon: '8' }
 ];
 
-const input = { up: false, down: false, left: false, right: false, sprint: false, shoot: false, aimDown: false, reload: false, firstPerson: false };
+const input = { up: false, down: false, left: false, right: false, sprint: false, shoot: false, shotId: 0, aimDown: false, reload: false, firstPerson: false };
 let state = null;
 let playerId = null;
 let roomCode = null;
@@ -68,6 +68,7 @@ let healRequest = false;
 let craftMenuOpen = false;
 let tradeMenuOpen = false;
 let mouse = { x: 0, y: 0 };
+let shotCounter = 0;
 let hotbarStateKey = '';
 
 let scene;
@@ -434,16 +435,19 @@ function makeBullet() {
   return g;
 }
 
-function makeCrop(ready) {
+function makeCrop(stage) {
   const g = new THREE.Group();
-  const stemMat = material(ready ? 0x77c98d : 0x4f8c54);
-  for (let i = 0; i < 5; i++) {
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, ready ? 0.75 : 0.38, 6), stemMat);
-    stem.position.set((i - 2) * 0.13, ready ? 0.38 : 0.19, Math.sin(i) * 0.09);
+  const ready = stage >= 1;
+  const stemMat = material(ready ? 0x77c98d : stage > 0.45 ? 0x5fa65d : 0x4f8c54);
+  const height = ready ? 0.82 : stage > 0.45 ? 0.55 : 0.28;
+  const count = ready ? 7 : stage > 0.45 ? 5 : 3;
+  for (let i = 0; i < count; i++) {
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, height, 6), stemMat);
+    stem.position.set((i - (count - 1) / 2) * 0.12, height / 2, Math.sin(i) * 0.09);
     g.add(stem);
   }
   if (ready) {
-    const food = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), material(0xe0c15a));
+    const food = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), material(0xe0c15a));
     food.position.y = 0.82;
     g.add(food);
   }
@@ -570,7 +574,17 @@ function syncWorld() {
     const mesh = add(e.id, makeBullet, e);
     mesh.rotation.y = -Math.atan2(e.vy, e.vx) - Math.PI / 2;
   });
-  (state.crops || []).forEach(e => add(e.id, () => makeCrop(Date.now() - e.plantedAt >= e.growthMs), e));
+  (state.crops || []).forEach(e => {
+    const stage = Math.min(1, Math.max(0, (Date.now() - e.plantedAt) / e.growthMs));
+    const mesh = add(e.id, () => makeCrop(stage), e);
+    const bucket = stage >= 1 ? 2 : stage > 0.45 ? 1 : 0;
+    if (mesh.userData.stageBucket !== bucket) {
+      worldGroup.remove(mesh);
+      objectMeshes.delete(e.id);
+      const refreshed = add(e.id, () => makeCrop(stage), e);
+      refreshed.userData.stageBucket = bucket;
+    }
+  });
   (state.wolves || []).forEach(e => {
     const mesh = add(e.id, () => makeWolf(e.den), e);
     const me = self();
@@ -716,11 +730,13 @@ function renderHotbar() {
 }
 
 function renderGunShop() {
-  if (!ui.gunSelect || !state?.guns || ui.gunSelect.dataset.loaded === 'yes') return;
+  if (!ui.gunSelect || !state?.guns) return;
+  const me = self();
+  const selectedGun = ui.gunSelect.value || me?.gun || 'glock';
   ui.gunSelect.innerHTML = Object.entries(state.guns).map(([id, gun]) => (
-    `<option value="${id}">${gun.name} - $${gun.price}</option>`
+    `<option value="${id}">${gun.name} - $${me?.ownedGuns?.includes(id) ? 0 : gun.price}${me?.ownedGuns?.includes(id) ? ' owned' : ''}</option>`
   )).join('');
-  ui.gunSelect.dataset.loaded = 'yes';
+  if (state.guns[selectedGun]) ui.gunSelect.value = selectedGun;
 }
 
 function recipeCost(recipe) {
@@ -825,6 +841,7 @@ canvas.addEventListener('mousedown', event => {
     return;
   }
   input.shoot = true;
+  input.shotId = ++shotCounter;
 });
 window.addEventListener('mouseup', event => {
   if (event.button === 0) input.shoot = false;
@@ -847,6 +864,7 @@ async function sendInput() {
     mode: placingBuild ? 'build' : 'use',
     buildType,
     buildTarget: placingBuild && point ? { x: point.x, y: point.y } : null,
+    plantTarget: slot.kind === 'plant' && point ? { x: point.x, y: point.y } : null,
     tool: slot.kind,
     upgradeTarget,
     buy: buyRequest,
@@ -900,7 +918,9 @@ function updateHud() {
   renderGunShop();
   ui.tradeMenu.hidden = !tradeMenuOpen;
   const mode = buildMode ? `Build: ${buildType}` : selected().label;
-  ui.buildPanel.textContent = `${mode} | green preview can build | red blocked | left click place | B build | E craft`;
+  ui.buildPanel.textContent = selected().kind === 'plant'
+    ? `${mode} | left click ground to plant | walk over grown crops to harvest`
+    : `${mode} | green preview can build | red blocked | left click place | B build | E craft`;
   renderCraftMenu();
 }
 

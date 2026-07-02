@@ -37,6 +37,8 @@ const GUNS = {
   laser_rifle: { name: 'Laser Rifle', price: 1300, damage: 40, range: 760, cooldown: 260, speed: 1400, spread: 0.01, mag: 18, reloadMs: 2400 },
   railgun: { name: 'Railgun', price: 1800, damage: 145, range: 980, cooldown: 1900, speed: 1600, spread: 0.006, mag: 3, reloadMs: 3200 }
 };
+const AUTO_GUNS = new Set(['machine_pistol', 'smg', 'mp5', 'vector', 'uzi', 'carbine', 'm4a1', 'ak47', 'scar', 'famas', 'aug', 'auto_shotgun', 'lmg', 'minigun', 'laser_rifle']);
+for (const [id, gun] of Object.entries(GUNS)) gun.auto = AUTO_GUNS.has(id);
 
 const WORLD_SIZE = 2400;
 const OUTPOST_RADIUS = 220;
@@ -52,7 +54,7 @@ const BUILD_TYPES = {
 };
 const CRAFT_RECIPES = {
   hammer: { name: 'Upgrade Hammer', wood: 18, stone: 10, iron: 0 },
-  pickaxe: { name: 'Pickaxe', wood: 12, stone: 8, iron: 0 },
+  pickaxe: { name: 'Wooden Pickaxe', wood: 16, stone: 0, iron: 0 },
   field_kit: { name: 'Field Kit', wood: 4, stone: 0, iron: 2 },
   camp_meal: { name: 'Camp Meal', wood: 2, stone: 0, iron: 0, foodCost: 2 },
   seed_pack: { name: 'Seed Pack', wood: 6, stone: 0, iron: 0 },
@@ -118,7 +120,9 @@ function makeLoot(x, y, kind = 'scrap') {
     fang: { label: 'Wolf Fang', value: 38 },
     relic: { label: 'Den Relic', value: 90 },
     med: { label: 'Med Kit', value: 45 },
-    ammo: { label: 'Ammo Box', value: 30 }
+    ammo: { label: 'Ammo Box', value: 30 },
+    food: { label: 'Food Ration', value: 18, food: 25 },
+    seeds: { label: 'Seed Pack', value: 22, seeds: 2 }
   };
   return { id: uid('loot'), x, y, kind, ...table[kind] };
 }
@@ -230,6 +234,7 @@ function addPlayer(room, name) {
     maxHp: 10,
     money: 90,
     gun: 'glock',
+    ownedGuns: ['glock'],
     wood: 30,
     stone: 12,
     iron: 0,
@@ -241,6 +246,7 @@ function addPlayer(room, name) {
     ammo: GUNS.glock.mag,
     reloadingUntil: 0,
     lastShot: 0,
+    lastShotId: 0,
     lastAxe: 0,
     lastBuild: 0,
     downedUntil: 0,
@@ -271,7 +277,7 @@ function snapshot(room, playerId) {
     outpostRadius: OUTPOST_RADIUS,
     players: [...room.players.values()].map(p => ({
       id: p.id, name: p.name, x: p.x, y: p.y, aim: p.aim, hp: p.hp, maxHp: p.maxHp,
-      money: p.money, gun: p.gun, wood: p.wood, stone: p.stone, iron: p.iron,
+      money: p.money, gun: p.gun, ownedGuns: p.ownedGuns, wood: p.wood, stone: p.stone, iron: p.iron,
       food: p.food, seeds: p.seeds, hasHammer: p.hasHammer, hasPickaxe: p.hasPickaxe, inventory: p.inventory,
       ammo: p.ammo, reloading: p.reloadingUntil > Date.now(), reloadMsLeft: Math.max(0, p.reloadingUntil - Date.now()),
       score: p.score, downed: p.downedUntil > Date.now()
@@ -342,10 +348,10 @@ function hitWolfByRay(room, player, angle, range, damage) {
 function fire(room, player, now, aiming = false) {
   const gun = GUNS[player.gun] || GUNS.pistol;
   finishReload(player, now);
-  if (now - player.lastShot < gun.cooldown || player.downedUntil > now || player.reloadingUntil > now) return;
+  if (now - player.lastShot < gun.cooldown || player.downedUntil > now || player.reloadingUntil > now) return false;
   if (player.ammo <= 0) {
     startReload(room, player, now);
-    return;
+    return false;
   }
   player.lastShot = now;
   player.ammo -= 1;
@@ -368,10 +374,11 @@ function fire(room, player, now, aiming = false) {
     hitWolfByRay(room, player, angle, gun.range, damage);
   }
   if (player.ammo <= 0) room.events.push(`${player.name}'s ${gun.name} is empty. Press R to reload.`);
+  return true;
 }
 
 function giveLoot(room, wolf) {
-  const drops = wolf.den ? ['relic', 'fang', 'fang'] : ['fang', 'scrap'];
+  const drops = wolf.den ? ['relic', 'fang', 'fang', 'food', 'seeds'] : ['fang', Math.random() > 0.45 ? 'food' : 'scrap'];
   drops.forEach((kind, i) => room.loot.push(makeLoot(wolf.x + i * 18 - 18, wolf.y + Math.random() * 20 - 10, kind)));
 }
 
@@ -443,18 +450,21 @@ function buildThing(room, player, now, type = 'wall', target = null) {
   });
 }
 
-function plantCrop(room, player, now) {
+function plantCrop(room, player, now, target = null) {
   if (now - player.lastBuild < 360 || player.seeds <= 0 || player.downedUntil > now) return;
-  player.lastBuild = now;
-  const x = clamp(player.x + Math.cos(player.aim) * 68, 80, WORLD_SIZE - 80);
-  const y = clamp(player.y + Math.sin(player.aim) * 68, 80, WORLD_SIZE - 80);
-  const blocked = dist(room.survivor, { x, y }) < OUTPOST_RADIUS
-    || room.crops.some(crop => dist(crop, { x, y }) < 42)
+  const wanted = target && Number.isFinite(target.x) && Number.isFinite(target.y)
+    ? target
+    : { x: player.x + Math.cos(player.aim) * 68, y: player.y + Math.sin(player.aim) * 68 };
+  const x = clamp(wanted.x, 80, WORLD_SIZE - 80);
+  const y = clamp(wanted.y, 80, WORLD_SIZE - 80);
+  if (dist(player, { x, y }) > 155) return;
+  const blocked = room.crops.some(crop => dist(crop, { x, y }) < 42)
     || room.buildings.some(building => dist(building, { x, y }) < 48);
   if (blocked) return;
+  player.lastBuild = now;
   player.seeds -= 1;
-  room.crops.push({ id: uid('crop'), x, y, plantedAt: now, growthMs: 45000, food: 3 + Math.floor(Math.random() * 3) });
-  room.events.push(`${player.name} planted food.`);
+  room.crops.push({ id: uid('crop'), owner: player.id, x, y, plantedAt: now, growthMs: 20000, food: 3 + Math.floor(Math.random() * 3) });
+  room.events.push(`${player.name} planted seeds.`);
 }
 
 function craftItem(room, player, item) {
@@ -470,7 +480,7 @@ function craftItem(room, player, item) {
     room.events.push(`${player.name} crafted an upgrade hammer.`);
   } else if (item === 'pickaxe') {
     player.hasPickaxe = true;
-    room.events.push(`${player.name} crafted a pickaxe.`);
+    room.events.push(`${player.name} crafted a wooden pickaxe.`);
   } else if (item === 'field_kit') {
     player.hp = clamp(player.hp + 5, 1, player.maxHp);
     room.events.push(`${player.name} crafted and used a field kit.`);
@@ -551,6 +561,16 @@ function tickRoom(room, dt) {
   const players = [...room.players.values()];
   for (const player of players) {
     if (now - player.lastSeen > 45000) continue;
+    for (const crop of [...room.crops]) {
+      const ready = now - crop.plantedAt >= crop.growthMs;
+      const owned = crop.owner === player.id;
+      if (ready && (owned || dist(player, crop) < 70)) {
+        player.food = clamp(player.food + crop.food * 12, 0, 100);
+        player.seeds += Math.random() > 0.5 ? 1 : 0;
+        room.crops = room.crops.filter(c => c.id !== crop.id);
+        room.events.push(`${player.name} harvested ${crop.food} food.`);
+      }
+    }
     if (player.downedUntil > now) {
       continue;
     }
@@ -581,40 +601,44 @@ function tickRoom(room, dt) {
     }
 
     if (input.shoot && input.mode === 'build') buildThing(room, player, now, input.buildType, input.buildTarget);
-    else if (input.shoot && input.tool === 'plant') plantCrop(room, player, now);
+    else if (input.shoot && input.tool === 'plant') plantCrop(room, player, now, input.plantTarget);
     else if (input.shoot && input.tool === 'axe') swingTool(room, player, now, 'axe');
     else if (input.shoot && input.tool === 'pickaxe') swingTool(room, player, now, 'pickaxe');
     else if (input.shoot && input.tool === 'hammer') {
       if (!repairBuilding(room, player)) upgradeBuilding(room, player, input.upgradeTarget || 'stone');
     }
-    else if (input.shoot && input.tool === 'gun') fire(room, player, now, Boolean(input.aimDown));
+    else if (input.shoot && input.tool === 'gun') {
+      const shotId = Number(input.shotId || 0);
+      const canFireSemi = GUNS[player.gun]?.auto || shotId !== player.lastShotId;
+      if (canFireSemi) {
+        const fired = fire(room, player, now, Boolean(input.aimDown));
+        if (fired && !GUNS[player.gun]?.auto) player.lastShotId = shotId;
+      }
+    }
     if (input.reload && input.tool === 'gun') startReload(room, player, now);
     if (input.axe) swingTool(room, player, now, 'axe');
     if (input.build) buildThing(room, player, now, input.buildType, input.buildTarget);
     if (input.craft) craftItem(room, player, input.craft);
     if (input.buyItem) buyTraderItem(room, player, input.buyItem);
+    input.craft = null;
+    input.buyItem = null;
 
     player.food = clamp(player.food - dt * (input.sprint ? 0.42 : 0.25), 0, 100);
     if (player.food <= 0) player.hp -= dt * 0.42;
-    for (const crop of [...room.crops]) {
-      if (now - crop.plantedAt >= crop.growthMs && dist(player, crop) < 46) {
-        player.food = clamp(player.food + crop.food * 12, 0, 100);
-        player.seeds += Math.random() > 0.5 ? 1 : 0;
-        room.crops = room.crops.filter(c => c.id !== crop.id);
-        room.events.push(`${player.name} harvested food.`);
-      }
-    }
-
     for (const loot of [...room.loot]) {
       if (dist(player, loot) < 42) {
-        player.inventory.push({ kind: loot.kind, label: loot.label, value: loot.value });
+        if (loot.food) player.food = clamp(player.food + loot.food, 0, 100);
+        else if (loot.seeds) player.seeds += loot.seeds;
+        else player.inventory.push({ kind: loot.kind, label: loot.label, value: loot.value });
         room.loot = room.loot.filter(l => l.id !== loot.id);
       }
     }
     for (const crate of room.crates) {
       if (!crate.opened && dist(player, crate) < 48) {
         crate.opened = true;
-        room.loot.push(makeLoot(crate.x, crate.y, Math.random() > 0.55 ? 'ammo' : 'scrap'));
+        room.loot.push(makeLoot(crate.x, crate.y, Math.random() > 0.5 ? 'food' : 'scrap'));
+        if (Math.random() > 0.62) room.loot.push(makeLoot(crate.x - 18, crate.y + 12, 'seeds'));
+        if (Math.random() > 0.7) room.loot.push(makeLoot(crate.x + 18, crate.y + 14, 'ammo'));
         if (Math.random() > 0.72) room.loot.push(makeLoot(crate.x + 22, crate.y - 12, 'med'));
       }
     }
@@ -626,17 +650,29 @@ function tickRoom(room, dt) {
         room.events.push(`${player.name} sold loot for $${sale}.`);
       }
     }
-    if (input.buy && GUNS[input.buy] && player.money >= GUNS[input.buy].price && dist(player, room.survivor) < 115) {
-      player.money -= GUNS[input.buy].price;
-      player.gun = input.buy;
-      player.ammo = GUNS[input.buy].mag;
-      player.reloadingUntil = 0;
-      room.events.push(`${player.name} bought ${GUNS[input.buy].name}.`);
+    input.sell = false;
+    if (input.buy && GUNS[input.buy] && dist(player, room.survivor) < 115) {
+      const alreadyOwned = player.ownedGuns.includes(input.buy);
+      const price = alreadyOwned ? 0 : GUNS[input.buy].price;
+      if (player.money < price) {
+        // Not enough cash to buy a new gun, but already-owned guns always switch for free.
+      } else {
+        player.money -= price;
+        if (!alreadyOwned) player.ownedGuns.push(input.buy);
+        player.gun = input.buy;
+        player.ammo = GUNS[input.buy].mag;
+        player.reloadingUntil = 0;
+        room.events.push(alreadyOwned
+          ? `${player.name} switched to ${GUNS[input.buy].name}.`
+          : `${player.name} bought ${GUNS[input.buy].name}.`);
+      }
     }
+    input.buy = null;
     if (input.heal && player.money >= 70 && player.hp < player.maxHp && dist(player, room.survivor) < 100) {
       player.money -= 70;
       player.hp = player.maxHp;
     }
+    input.heal = false;
     if (player.hp <= 0) {
       player.hp = 0;
       player.downedUntil = now + 4500;
@@ -648,7 +684,7 @@ function tickRoom(room, dt) {
   }
 
   for (const wolf of room.wolves) {
-    const living = players.filter(p => p.downedUntil <= now);
+    const living = players.filter(p => p.downedUntil <= now && dist(p, room.survivor) > OUTPOST_RADIUS);
     if (!living.length) break;
     let target = living[0];
     for (const p of living) if (dist(wolf, p) < dist(wolf, target)) target = p;
@@ -659,10 +695,14 @@ function tickRoom(room, dt) {
     wolf.y += dy / len * wolf.speed * dt;
     for (const wall of room.buildings) {
       if (dist(wolf, wall) < 42) {
+        if (wall.type === 'trap') {
+          if (damageWolf(room, wolf, dt * (wall.material === 'iron' ? 64 : wall.material === 'stone' ? 44 : 30), room.players.get(wall.owner))) break;
+          continue;
+        }
         wolf.x -= dx / len * wolf.speed * dt * 0.9;
         wolf.y -= dy / len * wolf.speed * dt * 0.9;
         wall.hp -= wolf.damage * dt * 8;
-        if (wall.type === 'spikes' || wall.type === 'trap') {
+        if (wall.type === 'spikes') {
           damageWolf(room, wolf, dt * (wall.material === 'iron' ? 42 : wall.material === 'stone' ? 28 : 18), room.players.get(wall.owner));
         }
         if (wall.type === 'campfire' && target.hp < target.maxHp && dist(target, wall) < 95) {
