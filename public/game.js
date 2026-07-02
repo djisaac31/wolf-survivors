@@ -683,7 +683,10 @@ function enterGame(data) {
 ui.create.addEventListener('click', () => createRoom().catch(err => alert(err.message)));
 ui.join.addEventListener('click', () => joinRoom().catch(err => alert(err.message)));
 ui.code.value = new URLSearchParams(location.search).get('room') || '';
-ui.buyGun?.addEventListener('click', () => buyRequest = ui.gunSelect?.value || 'glock');
+ui.buyGun?.addEventListener('click', () => {
+  buyRequest = ui.gunSelect?.value || 'glock';
+  selectSlot(0);
+});
 document.querySelectorAll('[data-buy-item]').forEach(button => button.addEventListener('click', () => buyItemRequest = button.dataset.buyItem));
 ui.sell.addEventListener('click', () => sellRequest = true);
 ui.heal.addEventListener('click', () => healRequest = true);
@@ -713,16 +716,24 @@ function selected() {
   return slots[selectedSlot] || slots[0];
 }
 
+function hotbarSlotView(slot, me) {
+  if (slot.kind !== 'gun') return slot;
+  const gun = state?.guns?.[me?.gun || 'glock'];
+  const name = gun?.name || slot.label;
+  return { ...slot, label: name, icon: name.slice(0, 1).toUpperCase() };
+}
+
 function renderHotbar() {
   if (!ui.hotbar) return;
   const me = self();
-  const nextKey = `${selectedSlot}:${me?.hasHammer}:${me?.hasPickaxe}`;
+  const nextKey = `${selectedSlot}:${me?.gun}:${me?.hasHammer}:${me?.hasPickaxe}`;
   if (nextKey === hotbarStateKey && ui.hotbar.children.length) return;
   hotbarStateKey = nextKey;
   ui.hotbar.innerHTML = slots.map((slot, index) => {
+    const view = hotbarSlotView(slot, me);
     const active = index === selectedSlot ? ' active' : '';
     const locked = (slot.kind === 'hammer' && !me?.hasHammer) || (slot.kind === 'pickaxe' && !me?.hasPickaxe) ? ' locked' : '';
-    return `<button class="slot${active}${locked}" data-slot="${index}"><span>${index + 1}</span><strong>${slot.icon}</strong><em>${slot.label}</em></button>`;
+    return `<button class="slot${active}${locked}" data-slot="${index}"><span>${index + 1}</span><strong>${view.icon}</strong><em>${view.label}</em></button>`;
   }).join('');
   ui.hotbar.querySelectorAll('button').forEach(button => {
     button.addEventListener('click', () => selectSlot(Number(button.dataset.slot)));
@@ -733,10 +744,18 @@ function renderGunShop() {
   if (!ui.gunSelect || !state?.guns) return;
   const me = self();
   const selectedGun = ui.gunSelect.value || me?.gun || 'glock';
-  ui.gunSelect.innerHTML = Object.entries(state.guns).map(([id, gun]) => (
+  ui.gunSelect.innerHTML = Object.entries(state.guns).sort(([a], [b]) => {
+    const aOwned = me?.ownedGuns?.includes(a) ? 0 : 1;
+    const bOwned = me?.ownedGuns?.includes(b) ? 0 : 1;
+    return aOwned - bOwned || state.guns[a].price - state.guns[b].price;
+  }).map(([id, gun]) => (
     `<option value="${id}">${gun.name} - $${me?.ownedGuns?.includes(id) ? 0 : gun.price}${me?.ownedGuns?.includes(id) ? ' owned' : ''}</option>`
   )).join('');
   if (state.guns[selectedGun]) ui.gunSelect.value = selectedGun;
+  if (ui.buyGun) {
+    const selectedId = ui.gunSelect.value || me?.gun || 'glock';
+    ui.buyGun.textContent = me?.ownedGuns?.includes(selectedId) ? 'Equip Gun' : 'Buy Gun';
+  }
 }
 
 function recipeCost(recipe) {
@@ -917,7 +936,7 @@ function updateHud() {
   renderHotbar();
   renderGunShop();
   ui.tradeMenu.hidden = !tradeMenuOpen;
-  const mode = buildMode ? `Build: ${buildType}` : selected().label;
+  const mode = buildMode ? `Build: ${buildType}` : hotbarSlotView(selected(), me).label;
   ui.buildPanel.textContent = selected().kind === 'plant'
     ? `${mode} | left click ground to plant | walk over grown crops to harvest`
     : `${mode} | green preview can build | red blocked | left click place | B build | E craft`;

@@ -421,20 +421,44 @@ function pay(player, cost) {
   player.iron -= cost.iron || 0;
 }
 
+function notice(room, player, message, now = Date.now()) {
+  if (now - (player.lastNotice || 0) < 850) return;
+  player.lastNotice = now;
+  room.events.push(message);
+}
+
 function buildThing(room, player, now, type = 'wall', target = null) {
   const spec = BUILD_TYPES[type] || BUILD_TYPES.wall;
-  if (now - player.lastBuild < 360 || !canPay(player, spec) || player.downedUntil > now) return;
+  if (now - player.lastBuild < 360 || player.downedUntil > now) return;
+  if (!canPay(player, spec)) {
+    notice(room, player, `${player.name} needs more materials to build ${spec.name}.`, now);
+    return;
+  }
   const wanted = target && Number.isFinite(target.x) && Number.isFinite(target.y)
     ? target
     : { x: player.x + Math.cos(player.aim) * 86, y: player.y + Math.sin(player.aim) * 86 };
   const x = clamp(wanted.x, 80, WORLD_SIZE - 80);
   const y = clamp(wanted.y, 80, WORLD_SIZE - 80);
-  if (dist(player, { x, y }) > 175) return;
-  const tooClose = [...room.players.values()].some(p => dist(p, { x, y }) < 42)
-    || room.buildings.some(b => dist(b, { x, y }) < 52)
-    || dist(room.survivor, { x, y }) < OUTPOST_RADIUS
-    || dist(room.den, { x, y }) < 130;
-  if (tooClose) return;
+  if (dist(player, { x, y }) > 175) {
+    notice(room, player, `${player.name} is too far away to build there.`, now);
+    return;
+  }
+  if (dist(room.survivor, { x, y }) < OUTPOST_RADIUS) {
+    notice(room, player, `You cannot build inside the survivor outpost.`, now);
+    return;
+  }
+  if (dist(room.den, { x, y }) < 130) {
+    notice(room, player, `You cannot build that close to the wolf den.`, now);
+    return;
+  }
+  if ([...room.players.values()].some(p => dist(p, { x, y }) < 42)) {
+    notice(room, player, `Move a little farther away before building.`, now);
+    return;
+  }
+  if (room.buildings.some(b => dist(b, { x, y }) < 52)) {
+    notice(room, player, `That build spot is blocked.`, now);
+    return;
+  }
   player.lastBuild = now;
   pay(player, spec);
   room.buildings.push({
@@ -451,16 +475,26 @@ function buildThing(room, player, now, type = 'wall', target = null) {
 }
 
 function plantCrop(room, player, now, target = null) {
-  if (now - player.lastBuild < 360 || player.seeds <= 0 || player.downedUntil > now) return;
+  if (now - player.lastBuild < 360 || player.downedUntil > now) return;
+  if (player.seeds <= 0) {
+    notice(room, player, `${player.name} needs seeds to plant food.`, now);
+    return;
+  }
   const wanted = target && Number.isFinite(target.x) && Number.isFinite(target.y)
     ? target
     : { x: player.x + Math.cos(player.aim) * 68, y: player.y + Math.sin(player.aim) * 68 };
   const x = clamp(wanted.x, 80, WORLD_SIZE - 80);
   const y = clamp(wanted.y, 80, WORLD_SIZE - 80);
-  if (dist(player, { x, y }) > 155) return;
+  if (dist(player, { x, y }) > 155) {
+    notice(room, player, `${player.name} is too far away to plant there.`, now);
+    return;
+  }
   const blocked = room.crops.some(crop => dist(crop, { x, y }) < 42)
     || room.buildings.some(building => dist(building, { x, y }) < 48);
-  if (blocked) return;
+  if (blocked) {
+    notice(room, player, `That planting spot is blocked.`, now);
+    return;
+  }
   player.lastBuild = now;
   player.seeds -= 1;
   room.crops.push({ id: uid('crop'), owner: player.id, x, y, plantedAt: now, growthMs: 20000, food: 3 + Math.floor(Math.random() * 3) });
@@ -498,7 +532,15 @@ function craftItem(room, player, item) {
 
 function buyTraderItem(room, player, item) {
   const listing = TRADER_ITEMS[item];
-  if (!listing || player.money < listing.price || dist(player, room.survivor) >= 115) return;
+  if (!listing) return;
+  if (dist(player, room.survivor) >= 115) {
+    notice(room, player, `Stand closer to the trader to buy supplies.`);
+    return;
+  }
+  if (player.money < listing.price) {
+    notice(room, player, `${player.name} needs $${listing.price} to buy ${listing.name}.`);
+    return;
+  }
   player.money -= listing.price;
   if (item === 'food') player.food = clamp(player.food + 30, 0, 100);
   if (item === 'seeds') player.seeds += 4;
@@ -651,11 +693,13 @@ function tickRoom(room, dt) {
       }
     }
     input.sell = false;
-    if (input.buy && GUNS[input.buy] && dist(player, room.survivor) < 115) {
+    if (input.buy && GUNS[input.buy]) {
       const alreadyOwned = player.ownedGuns.includes(input.buy);
       const price = alreadyOwned ? 0 : GUNS[input.buy].price;
-      if (player.money < price) {
-        // Not enough cash to buy a new gun, but already-owned guns always switch for free.
+      if (dist(player, room.survivor) >= 115) {
+        notice(room, player, `Stand closer to the trader to switch or buy guns.`, now);
+      } else if (player.money < price) {
+        notice(room, player, `${player.name} needs $${price} to buy ${GUNS[input.buy].name}.`, now);
       } else {
         player.money -= price;
         if (!alreadyOwned) player.ownedGuns.push(input.buy);
