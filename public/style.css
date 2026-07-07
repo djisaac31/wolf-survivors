@@ -120,6 +120,33 @@ label {
   margin-top: 1.25rem;
 }
 
+#lobbyLists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .85rem;
+  margin-top: 1.2rem;
+}
+
+#lobbyLists > div {
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 8px;
+  padding: .75rem;
+}
+
+#worldList,
+#saveList {
+  display: grid;
+  gap: .35rem;
+  margin-top: .45rem;
+}
+
+#worldList button,
+#saveList button {
+  text-align: left;
+  background: rgba(217, 219, 208, .9);
+}
+
 #game {
   position: fixed;
   inset: 0;
@@ -141,7 +168,12 @@ label {
 #inviteLink,
 #tip,
 #minimap,
-#respawnOverlay {
+#respawnOverlay,
+#hitLayer,
+#tutorialPanel,
+#settingsToggle,
+#settingsPanel,
+#victoryPanel {
   position: fixed;
   z-index: 2;
 }
@@ -200,6 +232,181 @@ label {
   box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
 }
 
+#settingsToggle {
+  top: .75rem;
+  left: 7.6rem;
+  padding: .45rem .62rem;
+  background: rgba(217, 219, 208, .94);
+}
+
+#hitLayer {
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hit-marker {
+  position: absolute;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 900;
+  text-shadow: 0 2px 8px #000;
+  transition: opacity .08s linear;
+}
+
+.hit-marker.den {
+  color: #ffb3b3;
+}
+
+#tutorialPanel {
+  left: .8rem;
+  top: 4rem;
+  width: min(270px, calc(100vw - 2rem));
+  padding: .62rem .72rem;
+  border-radius: 6px;
+  background: rgba(9, 11, 10, .74);
+  border: 1px solid rgba(224, 193, 90, .42);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .28);
+}
+
+#tutorialPanel[hidden] {
+  display: none;
+}
+
+#tutorialPanel strong {
+  display: block;
+  color: #e0c15a;
+  font-size: .86rem;
+  margin-bottom: .2rem;
+}
+
+#tutorialPanel span {
+  display: block;
+  color: #f4f0e8;
+  font-size: .78rem;
+  line-height: 1.35;
+}
+
+#settingsPanel,
+#victoryPanel,
+#inventoryMenu {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(390px, calc(100vw - 1.5rem));
+  padding: .85rem;
+  border-radius: 8px;
+  background: rgba(13, 16, 15, .94);
+  border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, .45);
+  z-index: 6;
+}
+
+#settingsPanel[hidden],
+#victoryPanel[hidden],
+#inventoryMenu[hidden] {
+  display: none;
+}
+
+#settingsPanel label {
+  display: block;
+  margin: .55rem 0;
+}
+
+#settingsPanel input[type="range"] {
+  margin-top: .5rem;
+}
+
+#settingsPanel input[type="checkbox"] {
+  width: auto;
+  margin: 0 .45rem 0 0;
+}
+
+#victoryPanel {
+  text-align: center;
+}
+
+#victoryPanel strong {
+  display: block;
+  color: #e0c15a;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  margin-bottom: .45rem;
+}
+
+#victoryPanel span {
+  display: block;
+  color: #f4f0e8;
+  font-weight: 800;
+  margin-bottom: .8rem;
+}
+
+#questPanel {
+  position: fixed;
+  left: .8rem;
+  top: 10.2rem;
+  width: min(270px, calc(100vw - 2rem));
+  z-index: 2;
+  padding: .62rem .72rem;
+  border-radius: 6px;
+  background: rgba(9, 11, 10, .74);
+  border: 1px solid rgba(119, 201, 141, .42);
+}
+
+#questPanel strong,
+#questPanel span {
+  display: block;
+}
+
+#questPanel strong {
+  color: #77c98d;
+  font-size: .82rem;
+}
+
+#questPanel span {
+  color: #f4f0e8;
+  font-size: .76rem;
+  line-height: 1.35;
+  margin: .22rem 0 .45rem;
+}
+
+#questPanel button {
+  width: 100%;
+  padding: .42rem;
+}
+
+#saveWorld {
+  position: fixed;
+  top: .75rem;
+  left: 14rem;
+  z-index: 2;
+  padding: .45rem .62rem;
+  background: rgba(217, 219, 208, .94);
+}
+
+#inventoryList {
+  display: grid;
+  gap: .65rem;
+}
+
+#inventoryList section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .3rem;
+  padding: .55rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .07);
+}
+
+#inventoryList section strong {
+  grid-column: 1 / -1;
+  color: #e0c15a;
+}
+
+#inventoryList span {
+  color: #f4f0e8;
+  font-size: .78rem;
+}
+
 #respawnOverlay {
   inset: 0;
   display: grid;
@@ -256,7 +463,7 @@ label {
 
 #hotbar {
   display: grid;
-  grid-template-columns: repeat(13, minmax(54px, 1fr));
+  grid-template-columns: repeat(17, minmax(48px, 1fr));
   gap: .25rem;
 }
 
@@ -335,6 +542,34 @@ label {
   gap: .5rem;
 }
 
+.trade-tabs {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: .25rem;
+}
+
+.trade-tabs button {
+  padding: .42rem .2rem;
+  background: rgba(217, 219, 208, .82);
+  font-size: .76rem;
+}
+
+.trade-tabs button.active {
+  background: #e0c15a;
+}
+
+.trade-page {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+}
+
+.trade-page[hidden] {
+  display: none;
+}
+
 #tradeMenu[hidden],
 #craftMenu[hidden] {
   display: none;
@@ -393,6 +628,10 @@ label {
     grid-template-columns: 1fr 1fr;
   }
 
+  #lobbyLists {
+    grid-template-columns: 1fr;
+  }
+
   #bottomHud {
     bottom: .35rem;
     padding: .35rem;
@@ -418,7 +657,7 @@ label {
 
   #hotbar {
     overflow-x: auto;
-    grid-template-columns: repeat(13, 54px);
+    grid-template-columns: repeat(17, 54px);
     scrollbar-width: none;
   }
 
@@ -445,5 +684,21 @@ label {
     height: 120px;
     top: 3.2rem;
     right: .45rem;
+  }
+
+  #tutorialPanel {
+    display: none;
+  }
+
+  #settingsToggle {
+    top: .55rem;
+    left: 7rem;
+    padding: .35rem .48rem;
+    font-size: .72rem;
+  }
+
+  #saveWorld,
+  #questPanel {
+    display: none;
   }
 }

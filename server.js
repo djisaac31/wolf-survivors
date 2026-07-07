@@ -8,6 +8,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const TICK_RATE = 12;
 const ROOM_TTL_MS = 1000 * 60 * 60 * 3;
 const WAVE_MS = 1000 * 60 * 2;
+const BUILD_GRID = 24;
 
 const GUNS = {
   glock: { name: 'Glock', price: 0, damage: 24, range: 520, cooldown: 430, speed: 820, spread: 0.07, mag: 15, reloadMs: 1350, ammoType: 'light' },
@@ -51,7 +52,11 @@ const BUILD_TYPES = {
   platform: { name: 'Shooting Platform', wood: 20, stone: 4, iron: 0, hp: 150, w: 64, h: 52 },
   trap: { name: 'Wolf Trap', wood: 10, stone: 6, iron: 0, hp: 80, w: 48, h: 48 },
   campfire: { name: 'Campfire', wood: 12, stone: 8, iron: 0, hp: 90, w: 44, h: 44 },
-  bench: { name: 'Upgrade Bench', wood: 24, stone: 12, iron: 0, hp: 180, w: 52, h: 42 }
+  bench: { name: 'Upgrade Bench', wood: 24, stone: 12, iron: 0, hp: 180, w: 52, h: 42 },
+  generator: { name: 'Generator', wood: 18, stone: 12, iron: 8, hp: 170, w: 48, h: 48 },
+  turret: { name: 'Auto Turret', wood: 24, stone: 12, iron: 16, hp: 135, w: 44, h: 44 },
+  alarm: { name: 'Base Alarm', wood: 12, stone: 4, iron: 6, hp: 80, w: 38, h: 38 },
+  electric_fence: { name: 'Electric Fence', wood: 12, stone: 8, iron: 12, hp: 145, w: 68, h: 18 }
 };
 const CRAFT_RECIPES = {
   hammer: { name: 'Upgrade Hammer', wood: 18, stone: 10, iron: 0 },
@@ -63,6 +68,7 @@ const CRAFT_RECIPES = {
   seed_pack: { name: 'Seed Pack', wood: 6, stone: 0, iron: 0 },
   light_ammo: { name: 'Light Ammo Pack', wood: 6, stone: 0, iron: 0 },
   heavy_ammo: { name: 'Heavy Ammo Pack', wood: 0, stone: 6, iron: 2 },
+  sheep_cart: { name: 'Sheep Cart', wood: 26, stone: 8, iron: 4 },
   cash_bundle: { name: 'Trader Goods', wood: 0, stone: 10, iron: 4 }
 };
 const TRADER_ITEMS = {
@@ -86,6 +92,28 @@ const UPGRADE_COSTS = {
   iron: { stone: 8, iron: 10, hpBoost: 2.8 }
 };
 const rooms = new Map();
+const savedWorlds = new Map();
+
+const WOLF_TYPES = {
+  normal: { label: 'Wolf', hp: 65, speed: 122, damage: 1, reward: 32 },
+  fast: { label: 'Fast Wolf', hp: 45, speed: 172, damage: 0.75, reward: 38 },
+  tank: { label: 'Tank Wolf', hp: 150, speed: 82, damage: 1.45, reward: 58 },
+  sneaky: { label: 'Sneaky Wolf', hp: 55, speed: 138, damage: 1.1, reward: 46 },
+  night: { label: 'Night Wolf', hp: 82, speed: 150, damage: 1.35, reward: 52 },
+  alpha: { label: 'Alpha Wolf', hp: 360, speed: 78, damage: 1.5, reward: 120 }
+};
+const QUESTS = [
+  { id: 'kill_wolves', name: 'Cull The Pack', goal: 5, reward: 160, text: 'Kill 5 wolves.' },
+  { id: 'gather_fangs', name: 'Fang Delivery', goal: 3, reward: 130, text: 'Collect 3 wolf fangs.' },
+  { id: 'build_base', name: 'Fortify', goal: 3, reward: 120, text: 'Build 3 base pieces.' },
+  { id: 'plant_food', name: 'Field Work', goal: 2, reward: 90, text: 'Plant 2 crops.' }
+];
+const BIOMES = [
+  { id: 'forest', name: 'Forest', x: 1200, y: 650, radius: 620, color: '#355a37' },
+  { id: 'swamp', name: 'Swamp', x: 520, y: 1620, radius: 430, color: '#38524c' },
+  { id: 'snow', name: 'Snowfield', x: 1780, y: 520, radius: 430, color: '#b8c8c8' },
+  { id: 'ruins', name: 'Ruined Town', x: 1710, y: 1660, radius: 500, color: '#6d665d' }
+];
 
 function json(res, status, body) {
   res.writeHead(status, {
@@ -125,6 +153,10 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function snap(value) {
+  return Math.round(value / BUILD_GRID) * BUILD_GRID;
+}
+
 function dist(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -142,17 +174,29 @@ function makeLoot(x, y, kind = 'scrap') {
   return { id: uid('loot'), x, y, kind, ...table[kind] };
 }
 
-function makeWolf(x, y, den = false) {
+function makeWolf(x, y, den = false, type = 'normal') {
+  const key = den ? 'alpha' : type;
+  const spec = WOLF_TYPES[key] || WOLF_TYPES.normal;
   return {
     id: uid(den ? 'alpha' : 'wolf'),
     x,
     y,
-    hp: den ? 360 : 65,
-    maxHp: den ? 360 : 65,
-    speed: den ? 78 : 122,
-    damage: den ? 1.5 : 1,
-    den
+    hp: spec.hp,
+    maxHp: spec.hp,
+    speed: spec.speed,
+    damage: spec.damage,
+    den,
+    type: key,
+    label: spec.label
   };
+}
+
+function randomWolfType(wave = 1) {
+  const pool = ['normal', 'normal', 'normal', 'fast'];
+  if (wave >= 2) pool.push('sneaky');
+  if (wave >= 3) pool.push('tank');
+  if (wave >= 4) pool.push('night', 'night');
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function makeTree(x, y) {
@@ -194,6 +238,10 @@ function makeRoom({ worldName, pvp = false, lifesteal = false }) {
     wave: 1,
     night: 1,
     nextWaveAt: Date.now() + WAVE_MS,
+    hitMarkers: [],
+    baseAlerts: [],
+    victory: null,
+    biomes: BIOMES,
     players: new Map(),
     bullets: [],
     wolves: [],
@@ -232,9 +280,47 @@ function makeRoom({ worldName, pvp = false, lifesteal = false }) {
   for (let i = 0; i < 14; i++) {
     const angle = Math.random() * Math.PI * 2;
     const radius = 190 + Math.random() * 180;
-    room.wolves.push(makeWolf(den.x + Math.cos(angle) * radius, den.y + Math.sin(angle) * radius, i < 2));
+    room.wolves.push(makeWolf(den.x + Math.cos(angle) * radius, den.y + Math.sin(angle) * radius, i < 2, randomWolfType(1)));
   }
   rooms.set(code, room);
+  return room;
+}
+
+function clonePlain(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function saveRoom(room) {
+  const key = `${room.code}-${Date.now().toString(36)}`;
+  savedWorlds.set(key, {
+    key,
+    savedAt: Date.now(),
+    name: room.name,
+    pvp: room.pvp,
+    lifesteal: room.lifesteal,
+    wave: room.wave,
+    night: room.night,
+    den: clonePlain(room.den),
+    trees: clonePlain(room.trees),
+    rocks: clonePlain(room.rocks),
+    crates: clonePlain(room.crates),
+    buildings: clonePlain(room.buildings),
+    crops: clonePlain(room.crops)
+  });
+  return key;
+}
+
+function makeRoomFromSave(save) {
+  const room = makeRoom({ worldName: `${save.name} Reloaded`, pvp: save.pvp, lifesteal: save.lifesteal });
+  room.wave = save.wave || 1;
+  room.night = save.night || 1;
+  room.den = clonePlain(save.den);
+  room.trees = clonePlain(save.trees || []);
+  room.rocks = clonePlain(save.rocks || []);
+  room.crates = clonePlain(save.crates || []);
+  room.buildings = clonePlain(save.buildings || []);
+  room.crops = clonePlain(save.crops || []);
+  room.events.push('Saved world loaded.');
   return room;
 }
 
@@ -263,6 +349,8 @@ function addPlayer(room, name) {
     hasHammer: false,
     hasPickaxe: false,
     inventory: [],
+    quest: { ...QUESTS[Math.floor(Math.random() * QUESTS.length)], progress: 0, done: false },
+    hasCart: false,
     ammo: GUNS.glock.mag,
     reloadingUntil: 0,
     lastShot: 0,
@@ -291,6 +379,9 @@ function snapshot(room, playerId) {
       nextWaveAt: room.nextWaveAt,
       den: room.den,
       survivor: room.survivor,
+      victory: room.victory,
+      biomes: room.biomes,
+      playerCount: room.players.size,
       events: room.events.slice(-7)
     },
     selfId: playerId,
@@ -302,12 +393,15 @@ function snapshot(room, playerId) {
       id: p.id, name: p.name, x: p.x, y: p.y, aim: p.aim, hp: p.hp, maxHp: p.maxHp,
       money: p.money, gun: p.gun, ownedGuns: p.ownedGuns, wood: p.wood, stone: p.stone, iron: p.iron,
       ammoReserve: p.ammoReserve, armor: p.armor,
+      quest: p.quest, hasCart: p.hasCart,
       food: p.food, seeds: p.seeds, hasHammer: p.hasHammer, hasPickaxe: p.hasPickaxe, inventory: p.inventory,
       ammo: p.ammo, reloading: p.reloadingUntil > Date.now(), reloadMsLeft: Math.max(0, p.reloadingUntil - Date.now()),
       score: p.score, downed: p.downedUntil > Date.now()
     })),
     bullets: room.bullets.map(b => ({ id: b.id, x: b.x, y: b.y, vx: b.vx, vy: b.vy, owner: b.owner })),
-    wolves: room.wolves.map(w => ({ id: w.id, x: w.x, y: w.y, hp: w.hp, maxHp: w.maxHp, den: w.den })),
+    hitMarkers: room.hitMarkers.filter(h => h.owner === playerId || h.owner === 'world').slice(-16),
+    baseAlerts: room.baseAlerts.filter(a => a.owner === playerId && Date.now() - a.at < 4500).slice(-8),
+    wolves: room.wolves.map(w => ({ id: w.id, x: w.x, y: w.y, hp: w.hp, maxHp: w.maxHp, den: w.den, type: w.type, label: w.label })),
     loot: room.loot,
     crates: room.crates,
     trees: room.trees,
@@ -343,11 +437,13 @@ function finishReload(player, now) {
 
 function damageWolf(room, wolf, damage, owner) {
   wolf.hp -= damage;
+  if (owner) addHitMarker(room, owner, wolf, damage, wolf.den ? 'den' : 'wolf');
   if (wolf.hp > 0) return false;
   room.wolves = room.wolves.filter(w => w.id !== wolf.id);
   if (owner) {
-    owner.money += wolf.den ? 120 : 32;
+    owner.money += wolf.den ? 120 : (WOLF_TYPES[wolf.type]?.reward || 32);
     owner.score += wolf.den ? 8 : 1;
+    addQuestProgress(owner, 'kill_wolves', 1);
     if (room.lifesteal) {
       owner.hp = clamp(owner.hp + 1, 1, owner.maxHp + 4);
       owner.maxHp = clamp(owner.maxHp + 0.25, 10, 20);
@@ -465,6 +561,48 @@ function hurtPlayer(player, amount) {
   player.hp -= amount * (1 - reduction);
 }
 
+function addHitMarker(room, owner, target, damage, kind = 'wolf') {
+  room.hitMarkers.push({
+    id: uid('hit'),
+    owner: owner?.id || 'world',
+    x: target.x,
+    y: target.y,
+    damage: Math.max(1, Math.round(damage)),
+    kind,
+    at: Date.now()
+  });
+  room.hitMarkers = room.hitMarkers.filter(marker => Date.now() - marker.at < 2500).slice(-80);
+}
+
+function addBaseAlert(room, wall, now) {
+  if (!wall.owner || now - (wall.lastAlert || 0) < 3000) return;
+  wall.lastAlert = now;
+  room.baseAlerts.push({ id: uid('alert'), owner: wall.owner, x: wall.x, y: wall.y, type: wall.type, at: now });
+  room.baseAlerts = room.baseAlerts.filter(alert => now - alert.at < 6000).slice(-40);
+  const owner = room.players.get(wall.owner);
+  if (owner) notice(room, owner, `Base under attack: ${wall.type} is taking damage.`, now);
+}
+
+function addQuestProgress(player, id, amount = 1) {
+  if (!player.quest || player.quest.done || player.quest.id !== id) return;
+  player.quest.progress = Math.min(player.quest.goal, (player.quest.progress || 0) + amount);
+}
+
+function turnInQuest(room, player, now) {
+  if (dist(player, room.survivor) >= 115) {
+    notice(room, player, `Stand near the trader to turn in quests.`, now);
+    return;
+  }
+  if (!player.quest || player.quest.progress < player.quest.goal) {
+    notice(room, player, `Quest is not finished yet.`, now);
+    return;
+  }
+  player.money += player.quest.reward;
+  room.events.push(`${player.name} completed ${player.quest.name} for $${player.quest.reward}.`);
+  const next = QUESTS[Math.floor(Math.random() * QUESTS.length)];
+  player.quest = { ...next, progress: 0, done: false };
+}
+
 function buildThing(room, player, now, type = 'wall', target = null) {
   const spec = BUILD_TYPES[type] || BUILD_TYPES.wall;
   if (now - player.lastBuild < 360 || player.downedUntil > now) return;
@@ -475,8 +613,8 @@ function buildThing(room, player, now, type = 'wall', target = null) {
   const wanted = target && Number.isFinite(target.x) && Number.isFinite(target.y)
     ? target
     : { x: player.x + Math.cos(player.aim) * 86, y: player.y + Math.sin(player.aim) * 86 };
-  const x = clamp(wanted.x, 80, WORLD_SIZE - 80);
-  const y = clamp(wanted.y, 80, WORLD_SIZE - 80);
+  const x = clamp(snap(wanted.x), 80, WORLD_SIZE - 80);
+  const y = clamp(snap(wanted.y), 80, WORLD_SIZE - 80);
   if (dist(player, { x, y }) > 175) {
     notice(room, player, `${player.name} is too far away to build there.`, now);
     return;
@@ -510,6 +648,7 @@ function buildThing(room, player, now, type = 'wall', target = null) {
     maxHp: spec.hp,
     owner: player.id
   });
+  addQuestProgress(player, 'build_base', 1);
   room.events.push(`${player.name} built ${spec.name}.`);
 }
 
@@ -536,6 +675,7 @@ function plantCrop(room, player, now, target = null) {
   }
   player.lastBuild = now;
   player.seeds -= 1;
+  addQuestProgress(player, 'plant_food', 1);
   room.crops.push({ id: uid('crop'), owner: player.id, x, y, plantedAt: now, growthMs: 20000, food: 3 + Math.floor(Math.random() * 3) });
   room.events.push(`${player.name} planted seeds.`);
 }
@@ -575,6 +715,9 @@ function craftItem(room, player, item) {
   } else if (item === 'heavy_ammo') {
     player.ammoReserve.heavy += 18;
     room.events.push(`${player.name} crafted heavy ammo.`);
+  } else if (item === 'sheep_cart') {
+    player.hasCart = true;
+    room.events.push(`${player.name} crafted a sheep cart.`);
   } else if (item === 'cash_bundle') {
     player.money += 120;
     room.events.push(`${player.name} crafted trader goods for $120.`);
@@ -670,7 +813,7 @@ function spawnWave(room, now) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const radius = 260 + Math.random() * 170;
-    const wolf = makeWolf(room.den.x + Math.cos(angle) * radius, room.den.y + Math.sin(angle) * radius, room.wave % 4 === 0 && i < 2);
+    const wolf = makeWolf(room.den.x + Math.cos(angle) * radius, room.den.y + Math.sin(angle) * radius, room.wave % 4 === 0 && i < 2, randomWolfType(room.wave));
     wolf.hp += room.wave * 6;
     wolf.maxHp = wolf.hp;
     wolf.speed += Math.min(42, room.wave * 3);
@@ -679,10 +822,36 @@ function spawnWave(room, now) {
   room.events.push(`Night ${room.night}: a wolf wave is coming.`);
 }
 
+function hasPower(room, building) {
+  return room.buildings.some(b => b.type === 'generator' && b.owner === building.owner && dist(b, building) < 260);
+}
+
+function tickPoweredBuildings(room, now, dt) {
+  for (const building of room.buildings) {
+    if (!hasPower(room, building)) continue;
+    if (building.type === 'turret' && now - (building.lastShot || 0) > 780) {
+      const wolf = room.wolves.filter(w => dist(w, building) < 310).sort((a, b) => dist(a, building) - dist(b, building))[0];
+      if (wolf) {
+        building.lastShot = now;
+        damageWolf(room, wolf, 18, room.players.get(building.owner));
+      }
+    }
+    if (building.type === 'electric_fence') {
+      for (const wolf of [...room.wolves]) {
+        if (dist(wolf, building) < 54) damageWolf(room, wolf, dt * 48, room.players.get(building.owner));
+      }
+    }
+    if (building.type === 'alarm' && room.wolves.some(w => dist(w, building) < 180)) {
+      addBaseAlert(room, building, now);
+    }
+  }
+}
+
 function tickRoom(room, dt) {
   const now = Date.now();
   room.lastSeen = now;
   spawnWave(room, now);
+  tickPoweredBuildings(room, now, dt);
   const players = [...room.players.values()];
   for (const player of players) {
     if (now - player.lastSeen > 45000) continue;
@@ -712,6 +881,7 @@ function tickRoom(room, dt) {
     }
     const len = Math.hypot(ax, ay) || 1;
     let speed = input.sprint ? 250 : 185;
+    if (player.hasCart && input.sprint) speed *= 1.22;
     if (input.aimDown && input.tool === 'gun') speed *= 0.58;
     if (player.reloadingUntil > now && input.tool === 'gun') speed *= 0.82;
     player.x = clamp(player.x + ax / len * speed * dt, 80, WORLD_SIZE - 80);
@@ -745,6 +915,7 @@ function tickRoom(room, dt) {
     if (input.build) buildThing(room, player, now, input.buildType, input.buildTarget);
     if (input.craft) craftItem(room, player, input.craft);
     if (input.buyItem) buyTraderItem(room, player, input.buyItem);
+    if (input.questTurnIn) turnInQuest(room, player, now);
     input.craft = null;
     input.buyItem = null;
 
@@ -761,7 +932,10 @@ function tickRoom(room, dt) {
           player.ammoReserve[type] += amount;
           room.events.push(`${player.name} picked up ${amount} ${type} ammo.`);
         }
-        else player.inventory.push({ kind: loot.kind, label: loot.label, value: loot.value });
+        else {
+          player.inventory.push({ kind: loot.kind, label: loot.label, value: loot.value });
+          if (loot.kind === 'fang') addQuestProgress(player, 'gather_fangs', 1);
+        }
         room.loot = room.loot.filter(l => l.id !== loot.id);
       }
     }
@@ -836,6 +1010,7 @@ function tickRoom(room, dt) {
         wolf.x -= dx / len * wolf.speed * dt * 0.9;
         wolf.y -= dy / len * wolf.speed * dt * 0.9;
         wall.hp -= wolf.damage * dt * 8;
+        addBaseAlert(room, wall, now);
         if (wall.type === 'spikes') {
           damageWolf(room, wolf, dt * (wall.material === 'iron' ? 42 : wall.material === 'stone' ? 28 : 18), room.players.get(wall.owner));
         }
@@ -878,10 +1053,18 @@ function tickRoom(room, dt) {
     }
     if (!remove && dist(bullet, room.den) < 86) {
       room.den.hp -= bullet.damage;
+      if (owner) addHitMarker(room, owner, room.den, bullet.damage, 'den');
       remove = true;
       if (room.den.hp <= 0 && !room.den.defeated) {
         room.den.hp = 0;
         room.den.defeated = true;
+        const survivors = [...room.players.values()];
+        room.victory = {
+          at: now,
+          survivedSeconds: Math.round((now - room.createdAt) / 1000),
+          night: room.night,
+          players: survivors.map(p => ({ name: p.name, score: p.score, money: Math.floor(p.money) }))
+        };
         room.events.push('The wolf den is defeated. Free play and PvP can continue.');
         for (let i = 0; i < 8; i++) room.loot.push(makeLoot(room.den.x + Math.random() * 110 - 55, room.den.y + Math.random() * 110 - 55, 'relic'));
       }
@@ -930,9 +1113,34 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/api/rooms') {
     const body = await readBody(req);
-    const room = makeRoom(body);
+    const save = body.saveKey ? savedWorlds.get(body.saveKey) : null;
+    const room = save ? makeRoomFromSave(save) : makeRoom(body);
     const player = addPlayer(room, body.name);
     return json(res, 200, { code: room.code, playerId: player.id, state: snapshot(room, player.id) });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/rooms') {
+    return json(res, 200, {
+      rooms: [...rooms.values()].map(room => ({
+        code: room.code,
+        name: room.name,
+        players: room.players.size,
+        pvp: room.pvp,
+        lifesteal: room.lifesteal,
+        night: room.night
+      }))
+    });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/saves') {
+    return json(res, 200, {
+      saves: [...savedWorlds.values()].map(save => ({
+        key: save.key,
+        name: save.name,
+        night: save.night,
+        savedAt: save.savedAt
+      })).slice(-12)
+    });
   }
 
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/healthz') {
@@ -946,6 +1154,13 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req);
     const player = addPlayer(room, body.name);
     return json(res, 200, { code: room.code, playerId: player.id, state: snapshot(room, player.id) });
+  }
+
+  const save = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]+)\/save$/);
+  if (req.method === 'POST' && save) {
+    const room = rooms.get(save[1]);
+    if (!room) return json(res, 404, { error: 'Room not found.' });
+    return json(res, 200, { ok: true, saveKey: saveRoom(room) });
   }
 
   const input = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]+)\/input$/);

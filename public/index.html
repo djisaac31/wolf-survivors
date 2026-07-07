@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wolf Den Survivors</title>
-  <link rel="stylesheet" href="/style.css?v=survival-systems-18">
+  <link rel="stylesheet" href="/style.css?v=systems-20">
 </head>
 <body>
   <main id="shell">
@@ -27,6 +27,10 @@
         <button id="create">Create World</button>
         <button id="join">Join Code</button>
       </div>
+      <div id="lobbyLists">
+        <div><strong>Open Worlds</strong><div id="worldList">Loading...</div></div>
+        <div><strong>Saved Worlds</strong><div id="saveList">Loading...</div></div>
+      </div>
     </section>
 
     <section id="game" hidden>
@@ -39,22 +43,66 @@
           <strong>Trader</strong>
           <button id="closeTrade" type="button">Close</button>
         </div>
-        <select id="gunSelect" aria-label="Trader guns"></select>
-        <button id="buyGun">Buy Gun</button>
-        <button data-buy-item="food">Food</button>
-        <button data-buy-item="seeds">Seeds</button>
-        <button data-buy-item="wood">Wood</button>
-        <button data-buy-item="stone">Stone</button>
-        <button data-buy-item="ammo_light">Light Ammo</button>
-        <button data-buy-item="ammo_heavy">Heavy Ammo</button>
-        <button data-buy-item="ammo_shells">Shells</button>
-        <button data-buy-item="armor_wool">Wool Armor</button>
-        <button data-buy-item="armor_iron">Iron Armor</button>
-        <button id="sell">Sell</button>
-        <button id="heal">Heal</button>
+        <div class="trade-tabs">
+          <button type="button" data-trade-tab="guns">Guns</button>
+          <button type="button" data-trade-tab="ammo">Ammo</button>
+          <button type="button" data-trade-tab="food">Food</button>
+          <button type="button" data-trade-tab="armor">Armor</button>
+          <button type="button" data-trade-tab="sell">Sell</button>
+        </div>
+        <div class="trade-page" data-page="guns">
+          <select id="gunSelect" aria-label="Trader guns"></select>
+          <button id="buyGun">Buy Gun</button>
+        </div>
+        <div class="trade-page" data-page="ammo">
+          <button data-buy-item="ammo_light">Light Ammo</button>
+          <button data-buy-item="ammo_heavy">Heavy Ammo</button>
+          <button data-buy-item="ammo_shells">Shells</button>
+        </div>
+        <div class="trade-page" data-page="food">
+          <button data-buy-item="food">Food</button>
+          <button data-buy-item="seeds">Seeds</button>
+          <button data-buy-item="wood">Wood</button>
+          <button data-buy-item="stone">Stone</button>
+        </div>
+        <div class="trade-page" data-page="armor">
+          <button data-buy-item="armor_wool">Wool Armor</button>
+          <button data-buy-item="armor_iron">Iron Armor</button>
+          <button id="heal">Heal</button>
+        </div>
+        <div class="trade-page" data-page="sell">
+          <button id="sell">Sell Loot</button>
+        </div>
       </div>
       <button id="inviteLink" type="button">Copy Invite Link</button>
+      <button id="settingsToggle" type="button">Settings</button>
+      <button id="saveWorld" type="button">Save World</button>
       <canvas id="minimap" width="170" height="170"></canvas>
+      <div id="hitLayer"></div>
+      <div id="questPanel">
+        <strong id="questTitle">Quest</strong>
+        <span id="questText">Visit the trader.</span>
+        <button id="questTurnIn" type="button">Turn In</button>
+      </div>
+      <div id="tutorialPanel">
+        <strong id="tutorialTitle">First Steps</strong>
+        <span id="tutorialText">Chop a tree with your axe.</span>
+      </div>
+      <div id="settingsPanel" hidden>
+        <div class="menu-head">
+          <strong>Settings</strong>
+          <button id="closeSettings" type="button">Close</button>
+        </div>
+        <label>Volume <input id="volumeSlider" type="range" min="0" max="100" value="55"></label>
+        <label><input id="toggleMinimap" type="checkbox" checked> Show minimap</label>
+        <label><input id="toggleTutorial" type="checkbox" checked> Show tutorial</label>
+        <label><input id="toggleQuality" type="checkbox" checked> High quality shadows</label>
+      </div>
+      <div id="victoryPanel" hidden>
+        <strong>Den Destroyed</strong>
+        <span id="victoryStats">Free play can continue.</span>
+        <button id="closeVictory" type="button">Continue</button>
+      </div>
       <div id="respawnOverlay" hidden>
         <strong>Knocked Down</strong>
         <span id="respawnText">Respawning...</span>
@@ -84,11 +132,18 @@
         </div>
         <div id="craftList"></div>
       </div>
+      <div id="inventoryMenu" hidden>
+        <div class="menu-head">
+          <strong>Backpack</strong>
+          <button id="closeInventory" type="button">Close</button>
+        </div>
+        <div id="inventoryList"></div>
+      </div>
       <div id="feed"></div>
-      <div id="tip">WASD move · left click shoot/use · hold right click aim · R reload · B build · E craft</div>
+      <div id="tip">WASD move · left click shoot/use · right click aim · R reload · B build · E craft · I backpack</div>
     </section>
   </main>
   <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
-  <script src="/game.js?v=survival-systems-18"></script>
+  <script src="/game.js?v=systems-20"></script>
 </body>
 </html>

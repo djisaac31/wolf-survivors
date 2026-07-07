@@ -10,6 +10,8 @@ const ui = {
   lifesteal: document.getElementById('lifesteal'),
   create: document.getElementById('create'),
   join: document.getElementById('join'),
+  worldList: document.getElementById('worldList'),
+  saveList: document.getElementById('saveList'),
   hudCode: document.getElementById('hudCode'),
   hudHp: document.getElementById('hudHp'),
   hudMoney: document.getElementById('hudMoney'),
@@ -24,6 +26,25 @@ const ui = {
   hudAmmo: document.getElementById('hudAmmo'),
   hudNight: document.getElementById('hudNight'),
   minimap: document.getElementById('minimap'),
+  hitLayer: document.getElementById('hitLayer'),
+  tutorialPanel: document.getElementById('tutorialPanel'),
+  tutorialTitle: document.getElementById('tutorialTitle'),
+  tutorialText: document.getElementById('tutorialText'),
+  settingsToggle: document.getElementById('settingsToggle'),
+  saveWorld: document.getElementById('saveWorld'),
+  questPanel: document.getElementById('questPanel'),
+  questTitle: document.getElementById('questTitle'),
+  questText: document.getElementById('questText'),
+  questTurnIn: document.getElementById('questTurnIn'),
+  settingsPanel: document.getElementById('settingsPanel'),
+  closeSettings: document.getElementById('closeSettings'),
+  volumeSlider: document.getElementById('volumeSlider'),
+  toggleMinimap: document.getElementById('toggleMinimap'),
+  toggleTutorial: document.getElementById('toggleTutorial'),
+  toggleQuality: document.getElementById('toggleQuality'),
+  victoryPanel: document.getElementById('victoryPanel'),
+  victoryStats: document.getElementById('victoryStats'),
+  closeVictory: document.getElementById('closeVictory'),
   respawnOverlay: document.getElementById('respawnOverlay'),
   respawnText: document.getElementById('respawnText'),
   tradeMenu: document.getElementById('tradeMenu'),
@@ -35,6 +56,9 @@ const ui = {
   craftMenu: document.getElementById('craftMenu'),
   craftList: document.getElementById('craftList'),
   closeCraft: document.getElementById('closeCraft'),
+  inventoryMenu: document.getElementById('inventoryMenu'),
+  inventoryList: document.getElementById('inventoryList'),
+  closeInventory: document.getElementById('closeInventory'),
   inviteLink: document.getElementById('inviteLink'),
   feed: document.getElementById('feed'),
   sell: document.getElementById('sell'),
@@ -54,7 +78,11 @@ const slots = [
   { label: 'Platform', kind: 'build', buildType: 'platform', icon: '5' },
   { label: 'Trap', kind: 'build', buildType: 'trap', icon: '6' },
   { label: 'Fire', kind: 'build', buildType: 'campfire', icon: '7' },
-  { label: 'Bench', kind: 'build', buildType: 'bench', icon: '8' }
+  { label: 'Bench', kind: 'build', buildType: 'bench', icon: '8' },
+  { label: 'Gen', kind: 'build', buildType: 'generator', icon: '9' },
+  { label: 'Turret', kind: 'build', buildType: 'turret', icon: 'T' },
+  { label: 'Alarm', kind: 'build', buildType: 'alarm', icon: '!' },
+  { label: 'Fence', kind: 'build', buildType: 'electric_fence', icon: 'E' }
 ];
 
 const input = { up: false, down: false, left: false, right: false, sprint: false, shoot: false, shotId: 0, aimDown: false, reload: false, firstPerson: false };
@@ -72,18 +100,26 @@ let craftRequest = null;
 let sellRequest = false;
 let healRequest = false;
 let craftMenuOpen = false;
+let inventoryOpen = false;
 let tradeMenuOpen = false;
+let questTurnInRequest = false;
 let mouse = { x: 0, y: 0 };
 let shotCounter = 0;
 let hotbarStateKey = '';
 let lastFeedText = '';
 let audioCtx = null;
+let tradeTab = 'guns';
+let settings = { volume: 0.55, minimap: true, tutorial: true, quality: true };
+let victoryDismissed = false;
+let lastNight = 1;
 
 let scene;
 let camera;
 let renderer;
 let worldGroup;
 let groundLayer;
+let sunLight;
+let hemiLight;
 let buildPreview;
 let buildPreviewType = null;
 let buildPreviewValid = null;
@@ -99,7 +135,7 @@ function playTone(type) {
     audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    const settings = {
+    const tone = {
       shoot: [150, 0.035, 0.045],
       build: [330, 0.045, 0.035],
       trade: [560, 0.05, 0.03],
@@ -107,12 +143,12 @@ function playTone(type) {
       wave: [210, 0.12, 0.05],
       harvest: [680, 0.06, 0.035]
     }[type] || [440, 0.05, 0.03];
-    osc.frequency.value = settings[0];
-    gain.gain.value = settings[2];
+    osc.frequency.value = tone[0];
+    gain.gain.value = tone[2] * settings.volume;
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start();
-    osc.stop(audioCtx.currentTime + settings[1]);
+    osc.stop(audioCtx.currentTime + tone[1]);
   } catch {
     audioCtx = null;
   }
@@ -126,6 +162,81 @@ function soundForEvent(text) {
   else if (/bought|sold|crafted/i.test(text)) playTone('trade');
   else if (/knocked down|damage/i.test(text)) playTone('hurt');
   else if (/harvested|picked up/i.test(text)) playTone('harvest');
+}
+
+function tutorialStep(me) {
+  if (!settings.tutorial || !me || !state) return null;
+  if ((me.wood || 0) < 38) return ['Gather Wood', 'Select the axe and chop trees for building wood.'];
+  if (!me.hasPickaxe) return ['Craft Pickaxe', 'Press E and craft the Wooden Pickaxe.'];
+  if ((state.crops || []).length === 0 && (me.seeds || 0) > 0) return ['Plant Food', 'Select Seeds and left click ground to plant food.'];
+  if ((state.buildings || []).filter(b => b.owner === playerId).length === 0) return ['Build A Base', 'Leave the outpost, press B, then place a wall.'];
+  if ((me.armor || 'none') === 'none') return ['Get Armor', 'Buy Wool Armor from the trader or craft padding.'];
+  if (!state.room.den.defeated) return ['Destroy The Den', 'Follow the minimap to the red den marker and shoot it.'];
+  return ['Free Play', 'The den is destroyed. Keep building, trading, and fighting.'];
+}
+
+function updateTutorial(me) {
+  if (!ui.tutorialPanel) return;
+  const step = tutorialStep(me);
+  ui.tutorialPanel.hidden = !step;
+  if (!step) return;
+  ui.tutorialTitle.textContent = step[0];
+  ui.tutorialText.textContent = step[1];
+}
+
+function applyTradeTab() {
+  document.querySelectorAll('[data-trade-tab]').forEach(button => {
+    button.classList.toggle('active', button.dataset.tradeTab === tradeTab);
+  });
+  document.querySelectorAll('.trade-page').forEach(page => {
+    page.hidden = page.dataset.page !== tradeTab;
+  });
+}
+
+function updateLighting() {
+  if (!scene || !sunLight || !hemiLight || !state) return;
+  const night = state.room.night || 1;
+  const waveComingSoon = (state.room.nextWaveAt || 0) - Date.now() < 25000;
+  const intensity = waveComingSoon || night > 1 ? 0.72 : 1;
+  scene.background.set(waveComingSoon ? 0x151b1e : 0x202723);
+  scene.fog.color.set(waveComingSoon ? 0x151b1e : 0x202723);
+  sunLight.intensity = 1.25 * intensity;
+  hemiLight.intensity = waveComingSoon ? 0.55 : 0.82;
+  renderer.toneMappingExposure = waveComingSoon ? 0.76 : 0.95;
+}
+
+function showHitMarkers() {
+  if (!ui.hitLayer || !state || !camera || !window.THREE) return;
+  const now = Date.now();
+  const rect = canvas.getBoundingClientRect();
+  ui.hitLayer.innerHTML = (state.hitMarkers || []).map(hit => {
+    const age = Math.min(1, (now - hit.at) / 1400);
+    const point = new THREE.Vector3(...to3(hit, 1.6)).project(camera);
+    const left = `${(point.x * 0.5 + 0.5) * rect.width}px`;
+    const top = `${(-point.y * 0.5 + 0.5) * rect.height}px`;
+    return `<span class="hit-marker ${hit.kind}" style="left:${left};top:${top};opacity:${1 - age};transform:translate(-50%, calc(-50% - ${age * 28}px));">${hit.damage}</span>`;
+  }).join('');
+}
+
+function updateVictory(me) {
+  if (!ui.victoryPanel || !state?.room?.victory || victoryDismissed) return;
+  const victory = state.room.victory;
+  const mine = victory.players?.find(p => p.name === me?.name);
+  ui.victoryPanel.hidden = false;
+  ui.victoryStats.textContent = `Night ${victory.night} | ${victory.survivedSeconds}s survived | score ${mine?.score ?? me?.score ?? 0} | $${mine?.money ?? me?.money ?? 0}`;
+}
+
+function slotTip(slot, me) {
+  if (slot.kind === 'gun') {
+    const gun = state?.guns?.[me?.gun || 'glock'];
+    return `${gun?.name || 'Gun'} | ${gun?.ammoType || 'ammo'} ammo | hold right click to aim`;
+  }
+  if (slot.kind === 'axe') return 'Axe | chop trees for wood';
+  if (slot.kind === 'pickaxe') return me?.hasPickaxe ? 'Wood Pick | mine stone and iron' : 'Locked | craft Wooden Pickaxe';
+  if (slot.kind === 'hammer') return me?.hasHammer ? 'Hammer | repair and upgrade owned base pieces' : 'Locked | craft Upgrade Hammer';
+  if (slot.kind === 'plant') return 'Seeds | plant food crops';
+  const spec = state?.buildTypes?.[slot.buildType] || {};
+  return `${spec.name || slot.label} | ${spec.wood || 0} wood ${spec.stone || 0} stone ${spec.iron || 0} iron`;
 }
 
 function to3(entity, y = 0) {
@@ -145,6 +256,11 @@ function worldFromMouse() {
   const point = new THREE.Vector3();
   raycaster.ray.intersectPlane(plane, point);
   return { x: point.x * 28 + 1200, y: point.z * 28 + 1200 };
+}
+
+function snapPoint(point) {
+  if (!point) return point;
+  return { x: Math.round(point.x / 24) * 24, y: Math.round(point.y / 24) * 24 };
 }
 
 async function loadThree() {
@@ -175,8 +291,10 @@ async function init3d() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.95;
 
-  scene.add(new THREE.HemisphereLight(0xcac3af, 0x1b221b, 0.82));
+  hemiLight = new THREE.HemisphereLight(0xcac3af, 0x1b221b, 0.82);
+  scene.add(hemiLight);
   const sun = new THREE.DirectionalLight(0xfff0c4, 1.25);
+  sunLight = sun;
   sun.position.set(-20, 30, 18);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -369,6 +487,16 @@ function makeWolf(den) {
   return g;
 }
 
+function makeWolfByType(wolf) {
+  const g = makeWolf(wolf.den);
+  const colors = { fast: 0xb96b38, tank: 0x6a4646, sneaky: 0x5d4b78, night: 0x33415e, alpha: 0x3d1f25, normal: 0x4d4f54 };
+  const tint = colors[wolf.type] || colors.normal;
+  g.traverse(child => {
+    if (child.isMesh && child.material?.color) child.material.color.set(tint);
+  });
+  return g;
+}
+
 function makeBuilding(type, matName) {
   const colors = { wood: 0x8b623f, stone: 0x858278, iron: 0x9aa4a8 };
   const mat = material(colors[matName] || colors.wood);
@@ -418,6 +546,35 @@ function makeBuilding(type, matName) {
     const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.8, 0.5), material(0x5b3f2f));
     base.position.y = 0.38;
     g.add(top, base);
+  } else if (type === 'generator') {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.85, 0.9), material(0x59656a));
+    box.position.y = 0.43;
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.06, 8, 18), new THREE.MeshBasicMaterial({ color: 0xe0c15a }));
+    coil.position.y = 1;
+    coil.rotation.x = Math.PI / 2;
+    g.add(box, coil);
+  } else if (type === 'turret') {
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.48, 0.38, 12), mat);
+    base.position.y = 0.19;
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 1.2), material(0x222222));
+    barrel.position.set(0, 0.62, -0.42);
+    g.add(base, barrel);
+  } else if (type === 'alarm') {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.35, 8), mat);
+    pole.position.y = 0.68;
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 8), new THREE.MeshBasicMaterial({ color: 0xd05555 }));
+    light.position.y = 1.48;
+    g.add(pole, light);
+  } else if (type === 'electric_fence') {
+    const left = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.15, 0.18), mat);
+    const right = left.clone();
+    const wire1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.06, 0.06), new THREE.MeshBasicMaterial({ color: 0x8ad6ff }));
+    const wire2 = wire1.clone();
+    left.position.set(-1.12, 0.58, 0);
+    right.position.set(1.12, 0.58, 0);
+    wire1.position.set(0, 0.78, 0);
+    wire2.position.set(0, 0.42, 0);
+    g.add(left, right, wire1, wire2);
   } else {
     const wall = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.35, 0.32), mat);
     wall.position.y = 0.68;
@@ -632,13 +789,19 @@ function syncWorld() {
     }
   });
   (state.wolves || []).forEach(e => {
-    const mesh = add(e.id, () => makeWolf(e.den), e);
+    const mesh = add(e.id, () => makeWolfByType(e), e);
+    mesh.position.y = Math.abs(Math.sin(Date.now() / 150 + e.x * 0.03)) * 0.08;
+    mesh.rotation.z = Math.sin(Date.now() / 190 + e.y * 0.02) * 0.035;
     const me = self();
     if (me) mesh.lookAt(...to3(me, 0.7));
   });
   (state.buildings || []).forEach(e => {
     const mesh = add(e.id, () => makeBuilding(e.type, e.material), e);
     mesh.rotation.y = -e.angle;
+    const alert = (state.baseAlerts || []).some(a => a.id && Math.hypot(a.x - e.x, a.y - e.y) < 6);
+    mesh.traverse(child => {
+      if (child.isMesh && child.material?.emissive) child.material.emissive.set(alert ? 0x332200 : 0x000000);
+    });
   });
   (state.players || []).forEach(e => {
     const mesh = add(e.id, () => makePlayerMesh(e), e);
@@ -678,7 +841,7 @@ function canPreviewBuild(point) {
 function updateBuildPreview() {
   if (!worldGroup || !state) return;
   const slot = selected();
-  const point = worldFromMouse();
+  const point = snapPoint(worldFromMouse());
   const active = buildMode && slot.kind === 'build' && point;
   if (!active) {
     if (buildPreview) buildPreview.visible = false;
@@ -719,6 +882,14 @@ async function createRoom() {
   enterGame(data);
 }
 
+async function createFromSave(saveKey) {
+  const data = await api('/api/rooms', {
+    method: 'POST',
+    body: JSON.stringify({ pvp: ui.pvp.checked, lifesteal: ui.lifesteal.checked, name: ui.name.value, worldName: ui.world.value, saveKey })
+  });
+  enterGame(data);
+}
+
 async function joinRoom() {
   const code = ui.code.value.trim().toUpperCase();
   if (!code) return;
@@ -740,14 +911,72 @@ function enterGame(data) {
 ui.create.addEventListener('click', () => createRoom().catch(err => alert(err.message)));
 ui.join.addEventListener('click', () => joinRoom().catch(err => alert(err.message)));
 ui.code.value = new URLSearchParams(location.search).get('room') || '';
+async function refreshLobbyLists() {
+  if (!ui.worldList || !ui.saveList) return;
+  try {
+    const [roomData, saveData] = await Promise.all([api('/api/rooms'), api('/api/saves')]);
+    ui.worldList.innerHTML = roomData.rooms.length
+      ? roomData.rooms.map(room => `<button type="button" data-join-code="${room.code}">${room.name} | ${room.players} players | Night ${room.night}</button>`).join('')
+      : '<span>No open worlds yet.</span>';
+    ui.saveList.innerHTML = saveData.saves.length
+      ? saveData.saves.map(save => `<button type="button" data-save-key="${save.key}">${save.name} | Night ${save.night}</button>`).join('')
+      : '<span>No saves yet.</span>';
+    ui.worldList.querySelectorAll('[data-join-code]').forEach(button => button.addEventListener('click', () => {
+      ui.code.value = button.dataset.joinCode;
+      joinRoom().catch(err => alert(err.message));
+    }));
+    ui.saveList.querySelectorAll('[data-save-key]').forEach(button => button.addEventListener('click', () => {
+      createFromSave(button.dataset.saveKey).catch(err => alert(err.message));
+    }));
+  } catch {
+    ui.worldList.textContent = 'Could not load worlds.';
+    ui.saveList.textContent = 'Could not load saves.';
+  }
+}
+refreshLobbyLists();
+setInterval(refreshLobbyLists, 5000);
 ui.buyGun?.addEventListener('click', () => {
   buyRequest = ui.gunSelect?.value || 'glock';
   selectSlot(0);
 });
 document.querySelectorAll('[data-buy-item]').forEach(button => button.addEventListener('click', () => buyItemRequest = button.dataset.buyItem));
+document.querySelectorAll('[data-trade-tab]').forEach(button => button.addEventListener('click', () => {
+  tradeTab = button.dataset.tradeTab;
+  applyTradeTab();
+}));
 ui.sell.addEventListener('click', () => sellRequest = true);
 ui.heal.addEventListener('click', () => healRequest = true);
 ui.closeTrade?.addEventListener('click', () => tradeMenuOpen = false);
+ui.settingsToggle?.addEventListener('click', () => ui.settingsPanel.hidden = !ui.settingsPanel.hidden);
+ui.saveWorld?.addEventListener('click', async () => {
+  if (!roomCode) return;
+  try {
+    const saved = await api(`/api/rooms/${roomCode}/save`, { method: 'POST', body: JSON.stringify({ playerId }) });
+    ui.feed.textContent = `World saved: ${saved.saveKey}`;
+  } catch (err) {
+    ui.feed.textContent = err.message;
+  }
+});
+ui.questTurnIn?.addEventListener('click', () => questTurnInRequest = true);
+ui.closeSettings?.addEventListener('click', () => ui.settingsPanel.hidden = true);
+ui.closeVictory?.addEventListener('click', () => {
+  victoryDismissed = true;
+  ui.victoryPanel.hidden = true;
+});
+ui.volumeSlider?.addEventListener('input', () => {
+  settings.volume = Number(ui.volumeSlider.value) / 100;
+});
+ui.toggleMinimap?.addEventListener('change', () => {
+  settings.minimap = ui.toggleMinimap.checked;
+  ui.minimap.hidden = !settings.minimap;
+});
+ui.toggleTutorial?.addEventListener('change', () => {
+  settings.tutorial = ui.toggleTutorial.checked;
+});
+ui.toggleQuality?.addEventListener('change', () => {
+  settings.quality = ui.toggleQuality.checked;
+  if (renderer) renderer.shadowMap.enabled = settings.quality;
+});
 ui.inviteLink?.addEventListener('click', async () => {
   copyInviteLink();
 });
@@ -767,6 +996,10 @@ async function copyInviteLink() {
 ui.closeCraft?.addEventListener('click', () => {
   craftMenuOpen = false;
   renderCraftMenu();
+});
+ui.closeInventory?.addEventListener('click', () => {
+  inventoryOpen = false;
+  renderInventory();
 });
 
 function selected() {
@@ -790,7 +1023,7 @@ function renderHotbar() {
     const view = hotbarSlotView(slot, me);
     const active = index === selectedSlot ? ' active' : '';
     const locked = (slot.kind === 'hammer' && !me?.hasHammer) || (slot.kind === 'pickaxe' && !me?.hasPickaxe) ? ' locked' : '';
-    return `<button class="slot${active}${locked}" data-slot="${index}"><span>${index + 1}</span><strong>${view.icon}</strong><em>${view.label}</em></button>`;
+    return `<button class="slot${active}${locked}" data-slot="${index}" title="${slotTip(slot, me)}"><span>${index + 1}</span><strong>${view.icon}</strong><em>${view.label}</em></button>`;
   }).join('');
   ui.hotbar.querySelectorAll('button').forEach(button => {
     button.addEventListener('click', () => selectSlot(Number(button.dataset.slot)));
@@ -843,6 +1076,23 @@ function renderCraftMenu() {
   });
 }
 
+function renderInventory() {
+  if (!ui.inventoryMenu || !ui.inventoryList || !state) return;
+  const me = self();
+  ui.inventoryMenu.hidden = !inventoryOpen;
+  if (!me) return;
+  const ammo = Object.entries(me.ammoReserve || {}).map(([type, amount]) => `<span>${type}: ${amount}</span>`).join('');
+  const loot = (me.inventory || []).length
+    ? me.inventory.map(item => `<span>${item.label} ($${item.value})</span>`).join('')
+    : '<span>No loot yet.</span>';
+  ui.inventoryList.innerHTML = `
+    <section><strong>Gear</strong><span>Gun: ${state.guns[me.gun]?.name || me.gun}</span><span>Armor: ${me.armor || 'none'}</span><span>Cart: ${me.hasCart ? 'yes' : 'no'}</span></section>
+    <section><strong>Ammo</strong>${ammo}</section>
+    <section><strong>Materials</strong><span>Wood: ${Math.floor(me.wood)}</span><span>Stone: ${Math.floor(me.stone)}</span><span>Iron: ${Math.floor(me.iron)}</span><span>Seeds: ${Math.floor(me.seeds)}</span></section>
+    <section><strong>Loot</strong>${loot}</section>
+  `;
+}
+
 function selectSlot(index) {
   selectedSlot = Math.max(0, Math.min(slots.length - 1, index));
   const slot = selected();
@@ -866,6 +1116,10 @@ window.addEventListener('keydown', event => {
     craftMenuOpen = !craftMenuOpen;
     renderCraftMenu();
   }
+  if (key === 'i') {
+    inventoryOpen = !inventoryOpen;
+    renderInventory();
+  }
   if (key === 'h') healRequest = true;
   if (key === 'r') input.reload = true;
   if (key === 'c') craftRequest = 'hammer';
@@ -881,12 +1135,15 @@ window.addEventListener('keydown', event => {
   }
   if (/^[1-9]$/.test(key)) {
     const n = Number(key);
-    const buildKeys = ['wall', 'spikes', 'gate', 'tower', 'platform', 'trap', 'campfire', 'bench'];
+    const buildKeys = ['wall', 'spikes', 'gate', 'tower', 'platform', 'trap', 'campfire', 'bench', 'generator'];
     if (buildMode && n <= buildKeys.length) {
       buildType = buildKeys[n - 1];
       selectSlot(5 + n - 1);
     } else selectSlot(n - 1);
   }
+  if (buildMode && key === '0') selectSlot(14);
+  if (buildMode && key === '-') selectSlot(15);
+  if (buildMode && key === '=') selectSlot(16);
 });
 
 window.addEventListener('keyup', event => {
@@ -940,7 +1197,7 @@ async function sendInput() {
     aim,
     mode: placingBuild ? 'build' : 'use',
     buildType,
-    buildTarget: placingBuild && point ? { x: point.x, y: point.y } : null,
+    buildTarget: placingBuild && point ? snapPoint(point) : null,
     plantTarget: slot.kind === 'plant' && point ? { x: point.x, y: point.y } : null,
     tool: slot.kind,
     upgradeTarget,
@@ -948,6 +1205,7 @@ async function sendInput() {
     buyItem: buyItemRequest,
     sell: sellRequest,
     heal: healRequest,
+    questTurnIn: questTurnInRequest,
     craft: craftRequest
   };
   input.reload = false;
@@ -955,6 +1213,7 @@ async function sendInput() {
   buyItemRequest = null;
   sellRequest = false;
   healRequest = false;
+  questTurnInRequest = false;
   craftRequest = null;
   try {
     state = (await api(`/api/rooms/${roomCode}/input`, {
@@ -977,6 +1236,8 @@ function updateCamera() {
 
 function drawMinimap() {
   if (!ui.minimap || !state) return;
+  ui.minimap.hidden = !settings.minimap;
+  if (!settings.minimap) return;
   const ctx = ui.minimap.getContext('2d');
   const size = ui.minimap.width;
   const scale = size / 2400;
@@ -986,20 +1247,50 @@ function drawMinimap() {
     ctx.arc(entity.x * scale, entity.y * scale, radius, 0, Math.PI * 2);
     ctx.fill();
   };
+  const icon = (entity, text, color, sizePx = 14) => {
+    ctx.fillStyle = color;
+    ctx.font = `900 ${sizePx}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, entity.x * scale, entity.y * scale);
+  };
   ctx.clearRect(0, 0, size, size);
   ctx.fillStyle = 'rgba(25, 31, 28, .94)';
   ctx.fillRect(0, 0, size, size);
+  (state.room.biomes || []).forEach(biome => {
+    ctx.fillStyle = biome.color || 'rgba(255,255,255,.12)';
+    ctx.globalAlpha = 0.22;
+    ctx.beginPath();
+    ctx.arc(biome.x * scale, biome.y * scale, biome.radius * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
   ctx.strokeStyle = 'rgba(255,255,255,.18)';
   ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
-  dot(state.room.survivor, '#77c98d', 5);
-  dot(state.room.den, '#d05555', 6);
-  (state.buildings || []).forEach(b => dot(b, b.owner === playerId ? '#e0c15a' : '#a9a9a9', 2.4));
-  (state.wolves || []).forEach(w => dot(w, w.den ? '#ff6b6b' : '#a83d45', w.den ? 3.5 : 2.2));
-  (state.players || []).forEach(p => dot(p, p.id === playerId ? '#ffffff' : '#69a7ff', p.id === playerId ? 4 : 3));
+  icon(state.room.survivor, '+', '#77c98d', 18);
+  icon(state.room.den, 'X', '#d05555', 18);
+  (state.buildings || []).forEach(b => icon(b, b.owner === playerId ? '■' : '□', b.owner === playerId ? '#e0c15a' : '#a9a9a9', 9));
+  (state.baseAlerts || []).forEach(a => {
+    ctx.strokeStyle = '#ffef8a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(a.x * scale, a.y * scale, 7, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+  const wolfColors = { fast: '#ff9a62', tank: '#9b4f4f', sneaky: '#b077d6', night: '#6f83ff', alpha: '#ff6b6b', normal: '#a83d45' };
+  (state.wolves || []).forEach(w => dot(w, wolfColors[w.type] || '#a83d45', w.den ? 3.8 : 2.4));
+  (state.players || []).forEach(p => icon(p, p.id === playerId ? '●' : '●', p.id === playerId ? '#ffffff' : '#69a7ff', p.id === playerId ? 13 : 10));
   ctx.fillStyle = '#f4f0e8';
   ctx.font = '700 10px system-ui';
   ctx.fillText('Outpost', state.room.survivor.x * scale + 6, state.room.survivor.y * scale + 3);
   ctx.fillText('Den', state.room.den.x * scale - 20, state.room.den.y * scale - 8);
+}
+
+function updateQuest(me) {
+  if (!ui.questPanel || !me?.quest) return;
+  ui.questTitle.textContent = `${me.quest.name} (${me.quest.progress}/${me.quest.goal})`;
+  ui.questText.textContent = `${me.quest.text} Reward: $${me.quest.reward}`;
+  ui.questTurnIn.disabled = me.quest.progress < me.quest.goal;
 }
 
 function updateHud() {
@@ -1023,17 +1314,28 @@ function updateHud() {
   const feedText = state.room.events.slice(-1)[0] || '';
   ui.feed.textContent = feedText;
   soundForEvent(feedText);
+  if ((state.room.night || 1) !== lastNight) {
+    lastNight = state.room.night || 1;
+    playTone('wave');
+  }
   ui.respawnOverlay.hidden = !me.downed;
   if (me.downed) ui.respawnText.textContent = 'You will respawn at the outpost in a few seconds.';
   renderHotbar();
   renderGunShop();
+  applyTradeTab();
   ui.tradeMenu.hidden = !tradeMenuOpen;
   const mode = buildMode ? `Build: ${buildType}` : hotbarSlotView(selected(), me).label;
   ui.buildPanel.textContent = selected().kind === 'plant'
     ? `${mode} | left click ground to plant | walk over grown crops to harvest`
     : `${mode} | green preview can build | red blocked | left click place | B build | E craft`;
   renderCraftMenu();
+  renderInventory();
+  updateQuest(me);
+  updateTutorial(me);
+  updateVictory(me);
   drawMinimap();
+  showHitMarkers();
+  updateLighting();
 }
 
 function animate() {
